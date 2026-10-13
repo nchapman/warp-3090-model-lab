@@ -45,7 +45,8 @@ on a 3090. Attention impl per machine: `simple_flex_attention` on B200,
 
 Workflow: **test locally, then push to a big box.**
 `bash regression.sh` locally → `bash pod.sh push` → `bash pod.sh run '...'` →
-`bash pod.sh pull results/ ...` → verify SHA256s → teardown.
+`bash pod.sh pull results/ ...` → verify (`(cd data && sha256sum -c
+MANIFEST.sha256 --quiet)` locally; hash pulled artifacts yourself) → teardown.
 
 ## Model matrix
 
@@ -104,18 +105,46 @@ MTP 2.71. Measure the MTP baseline on your own ladder first
 
 ## Data (frozen, in git under `data/`)
 
-| file | what |
-|---|---|
-| `calib-cascade-v1.jsonl` | champion calibration set (999 rows) |
-| `probe-v4.jsonl` | frozen 378-row fidelity ruler (the weightedKL metric) |
-| `probe-guard.jsonl` | OOD guard (no_robots + Belebele, 9 langs) |
-| `ladder-20.jsonl` | the 20 held-out eval prompts (the τ metric) — hash-banned from drafter training and disjoint from the probes; prompt texts do recur inside calib rows (shared upstream source) — affects no quoted number |
-| `conv-ids/` | conversation-id manifests for the v3/v4/v5 training slices |
+Frozen **deliberately**: every published number is measured on these exact
+files (weightedKL on probe-v4, τ on ladder-20), so drifting them silently
+breaks cross-run comparability. Verify your checkout:
 
-Derived from nvidia/Nemotron-Cascade-2-SFT-Data (+ no_robots / Belebele for
-guards); regen outputs are Qwen model outputs — check source licenses before
-redistributing. Big artifacts (v4 regen jsonls, champion checkpoint) go to the
-HF Hub under warp-3090 naming, not git.
+```bash
+(cd data && sha256sum -c MANIFEST.sha256 --quiet && echo data OK)
+```
+
+| file | what | provenance |
+|---|---|---|
+| `calib-cascade-v1.jsonl` | champion calibration set (999 rows) | cascade pool, stratified card blend, SEED 0 |
+| `probe-v4.jsonl` | frozen 378-row fidelity ruler (the weightedKL metric) | cascade pool per V4_TARGETS + Belebele 10×9 langs |
+| `probe-guard.jsonl` | OOD guard (no_robots 40 + Belebele 4×9 langs) | no_robots **train** split (verified vs cached upstream arrows) + facebook/belebele |
+| `ladder-20.jsonl` | the 20 held-out eval prompts (the τ metric) | rows 50–69 of the v1-era 100-row cascade dev set (`dflash_data_v1`), frozen since the first DFlash2 run; hash-banned from drafter training, disjoint from the probes. Prompt texts recur inside calib rows (both cascade-derived) — affects no quoted number |
+| `conv-ids/` | conversation-id manifests for the v3/v4/v5 training slices | exact `slice_convs.py` preset outputs — deterministically reproducible (seeds, per-subset rounding, val sampling all verified against the manifests) |
+| `MANIFEST.sha256` | hash pin for everything above | `find . -type f ! -name MANIFEST.sha256 \| sort \| sed 's|^\./||' \| xargs sha256sum` (prefix-free so `sha256sum -c` and the uploader's set check both round-trip) |
+
+**Reproducibility contract.** `quant/build_calib.py` builds *new* sets of each
+calib/probe/guard kind — always hash-disjoint from the frozen ones (freshness
+by design, not regeneration). Every build writes a `<out>.sources.json` sidecar
+pinning each upstream file it read (dataset revision + SHA256), so silent
+upstream drift (HF reshards, split-order flips) is detectable by diffing
+sidecars. The no_robots split is explicit (`--no-robots-split`, default `train`
+= the frozen set's actual source split, verified against the cached upstream
+arrows; the converted-parquet API has served split lists in unstable order). The frozen sets pre-date the sidecar mechanism and
+are pinned by `MANIFEST.sha256` + the HF mirror below.
+
+**Licenses** (check before redistributing): cascade-derived sets → NVIDIA Open
+Model License; probe-guard no_robots rows → CC-BY-NC-4.0 (non-commercial);
+Belebele rows → CC-BY-SA-4.0. Regen outputs are Qwen model outputs.
+
+**HF mirror:** the frozen sets are dual-homed at
+`nchapman/warp-3090-frozen-data` (currently **private**; publish with
+`scripts/upload_frozen_data.py --public --allow-nc-public` after reading the
+license note above — pinned at commit `f8670cd`, verify against
+`data/MANIFEST.sha256` after pulling). Good reason to freeze *on the Hub*
+rather than git alone: revision-hash citability, pull-by-pods without a repo
+clone, and a license/provenance surface git can't provide. Big artifacts (v4
+regen jsonls, champion checkpoint) go to the Hub under the same naming, never
+git.
 
 ## Layout
 

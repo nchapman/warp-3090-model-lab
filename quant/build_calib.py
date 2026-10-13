@@ -29,6 +29,7 @@ import argparse
 import glob
 import hashlib
 import json
+import os
 import random
 import subprocess
 import sys
@@ -45,6 +46,12 @@ SEED = 0
 MIN_CHARS, MAX_CHARS = 200, 600_000
 CASCADE_SOURCE = "nvidia/Nemotron-Cascade-2-SFT-Data"
 OVERSAMPLE = 2.5
+
+# Provenance ledger: one record per upstream byte we read this run. Written
+# next to the output as <out>.sources.json — transparency contract: any set
+# this script builds can name exactly which dataset revisions + file hashes
+# fed it. Rebuilds that silently drift (upstream reshards) are detectable.
+SOURCES = []
 
 # dataset's own blend (card statistics, safety excluded, renormalized)
 CARD_TOTALS = {
@@ -73,11 +80,15 @@ def row_hash(msgs):
 
 
 def banned_hashes(extra_excludes):
-    """Hashes of every frozen set in data/ + user-provided excludes."""
+    """Hashes of every frozen set in data/ + user-provided excludes.
+    Every file opened here gates row selection, so each is recorded in the
+    provenance ledger (the sidecar must enumerate ALL selection inputs,
+    not just the pools sampled from)."""
     banned = set()
     for frozen in ["calib-cascade-v1.jsonl", "probe-v4.jsonl", "probe-guard.jsonl"]:
         p = DATA / frozen
         if p.exists():
+            record_source("frozen-set (exclusion input)", p)
             with open(p) as f:
                 for line in f:
                     r = json.loads(line)
@@ -86,6 +97,7 @@ def banned_hashes(extra_excludes):
     for pattern in extra_excludes:
         for p in glob.glob(str(Path(pattern).absolute() if Path(pattern).is_absolute()
                                else ROOT / pattern)):
+            record_source("--exclude (exclusion input)", p)
             with open(p) as f:
                 for line in f:
                     r = json.loads(line)
@@ -102,12 +114,50 @@ def valid(msgs):
     return MIN_CHARS <= total <= MAX_CHARS
 
 
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def hf_dataset_revision(dataset):
+    """Current HEAD commit sha of a HF dataset repo (None offline/stale cache)."""
+    out = subprocess.run(
+        ["curl", "-sL", "--connect-timeout", "10", "--max-time", "30",
+         f"https://huggingface.co/api/datasets/{dataset}"],
+        capture_output=True, text=True,
+    ).stdout
+    try:
+        d = json.loads(out)
+        return d.get("sha") if isinstance(d, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def record_source(dataset, path, **extra):
+    # repo-relative when the file lives in the checkout (sidecars are meant
+    # to be diffed/shared — don't leak the builder's absolute paths);
+    # external scratch dirs keep their absolute path as the honest record
+    p = Path(path).resolve()
+    try:
+        loc = str(p.relative_to(ROOT))
+    except ValueError:
+        loc = str(p)
+    rec = {"dataset": dataset, "file": loc, "sha256": sha256_file(p)}
+    rec.update(extra)
+    SOURCES.append(rec)
+    return rec
+
+
 def pool_for(pool_dir, subset, need, rng, banned):
     """Randomized row-group scan across the subset's parquet shards."""
     files = sorted(glob.glob(f"{pool_dir}/{subset}_*.parquet"))
     if not files:
         sys.exit(f"no parquet shards for {subset!r} under {pool_dir} — download the "
                  f"pool first (see module docstring)")
+    recorded = set()  # shard -> provenance recorded on FIRST actual read
     pool = []
     pfs = [(pq.ParquetFile(f), f) for f in files]
     order = list(range(sum(pf.metadata.num_row_groups for pf, _ in pfs)))
@@ -119,6 +169,9 @@ def pool_for(pool_dir, subset, need, rng, banned):
             idx += 1
             if rg >= pf.metadata.num_row_groups:
                 continue
+            if f not in recorded:  # local pool snapshot — no repo revision exists
+                record_source(f"{CASCADE_SOURCE} (local pool)", f)
+                recorded.add(f)
             t = pf.read_row_group(rg, columns=["messages", "generator"])
             for msgs, gen in zip(t["messages"].to_pylist(), t["generator"].to_pylist()):
                 msgs = [{"role": m["role"], "content": m.get("content") or ""} for m in msgs]
@@ -170,9 +223,17 @@ def build_calib(args, rng, banned):
 def belebele_rows(lang, need, rng, banned, raw_dir):
     """ML probe rows from facebook/belebele (fetched on first use)."""
     dest = raw_dir / f"belebele_{lang}.parquet"
-    if not dest.exists():
-        urls = hf_parquet_urls("facebook/belebele", lang)
+    fresh = not dest.exists()
+    rev, split = None, "unknown (cached)"
+    if fresh:
+        rev = hf_dataset_revision("facebook/belebele")
+        split, urls = hf_parquet_urls("facebook/belebele", lang)
+        if not urls:
+            sys.exit(f"no converted parquet for facebook/belebele[{lang}]")
         curl(urls[0], dest)
+    record_source("facebook/belebele", dest, config=lang, split=split,
+                  revision=rev or ("revision-lookup-failed" if fresh
+                                   else "cached-before-this-run"))
     t = pq.read_table(dest, columns=["flores_passage", "question", "mc_answer1",
                                      "mc_answer2", "mc_answer3", "mc_answer4",
                                      "correct_answer_num"])
@@ -215,18 +276,52 @@ def build_probe(args, rng, banned):
     return rows
 
 
-def hf_parquet_urls(dataset, config):
+def hf_parquet_urls(dataset, config, split=None):
+    """Converted-parquet URLs for a dataset config. Returns (split, urls).
+    An explicitly requested split MUST exist (hard exit otherwise — silent
+    fallback is the exact hazard this records against). With split=None the
+    API's first split is used and its name returned so callers record what
+    they actually got (API split order is not guaranteed)."""
     out = subprocess.run(
-        ["curl", "-sL", f"https://huggingface.co/api/datasets/{dataset}/parquet"],
+        ["curl", "-sL", "--connect-timeout", "10", "--max-time", "30",
+         f"https://huggingface.co/api/datasets/{dataset}/parquet"],
         capture_output=True, text=True,
-    ).stdout
-    d = json.loads(out)
-    splits = d.get(config) or next(iter(d.values()), {})
-    return next(iter(splits.values()), []) if splits else []
+    )
+    try:
+        d = json.loads(out.stdout)
+    except json.JSONDecodeError:
+        sys.exit(f"non-JSON response from parquet API for {dataset} "
+                 f"(rc={out.returncode}, body: {out.stdout[:120]!r})")
+    if config not in d or not d[config]:
+        sys.exit(f"{dataset} has no parquet config {config!r} "
+                 f"(available: {sorted(d)})")
+    splits = d[config]
+    if not splits:
+        return split, []
+    if split is not None:
+        if split not in splits:
+            sys.exit(f"{dataset}[{config}] has no split {split!r} "
+                     f"(available: {sorted(splits)})")
+        return split, splits[split]
+    name = next(iter(splits))
+    return name, splits[name]
 
 
 def curl(url, dest):
-    subprocess.run(["curl", "-sL", "--retry", "3", "-o", str(dest), url], check=True)
+    # --fail: an HTTP error must not "succeed" and poison the cache with an
+    # error page (which record_source would then hash-pin as authoritative);
+    # download to a temp file + atomic rename so partial downloads never cache
+    tmp = f"{dest}.part"
+    try:
+        subprocess.run(["curl", "-sL", "--fail", "--retry", "3",
+                        "--connect-timeout", "15", "--max-time", "600",
+                        "-o", tmp, url], check=True)
+        os.replace(tmp, dest)
+    except subprocess.CalledProcessError as e:
+        sys.exit(f"download failed ({e.returncode}) for {url} -> {dest}")
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def build_guard(args, rng, banned):
@@ -234,10 +329,24 @@ def build_guard(args, rng, banned):
     raw_dir.mkdir(parents=True, exist_ok=True)
     rows = []
 
-    # no_robots: human-written general chat/IF (Coding excluded)
-    dest = raw_dir / "no_robots_0.parquet"
-    if not dest.exists():
-        curl(hf_parquet_urls("HuggingFaceH4/no_robots", "default")[0], dest)
+    # no_robots: human-written general chat/IF (Coding excluded).
+    # The frozen probe-guard's rows are from the TRAIN split (verified against
+    # the cached upstream arrows) — the split is explicit here because the
+    # converted-parquet API has served split lists in unstable order (test has
+    # come back first on some calls), which would silently switch splits.
+    dest = raw_dir / f"no_robots_{args.no_robots_split}.parquet"
+    fresh = not dest.exists()
+    rev, split = None, args.no_robots_split  # filename pins it when cached
+    if fresh:
+        rev = hf_dataset_revision("HuggingFaceH4/no_robots")
+        split, urls = hf_parquet_urls("HuggingFaceH4/no_robots", "default",
+                                      split=args.no_robots_split)
+        if not urls:
+            sys.exit("no converted parquet for HuggingFaceH4/no_robots")
+        curl(urls[0], dest)
+    record_source("HuggingFaceH4/no_robots", dest, split=split,
+                  revision=rev or ("revision-lookup-failed" if fresh
+                                   else "cached-before-this-run"))
     t = pq.read_table(dest, columns=["messages", "category"])
     pool = [(c, m) for c, m in zip(t["category"].to_pylist(), t["messages"].to_pylist())
             if c != "Coding"]
@@ -274,6 +383,11 @@ def main():
                          "(default: the frozen probe-v4 allocation)")
     ap.add_argument("--ml-per-lang", type=int, default=ML_PER_LANG)
     ap.add_argument("--n-robots", type=int, default=40)
+    ap.add_argument("--no-robots-split", choices=["train", "test"], default="train",
+                    help="no_robots split to sample (default train — the frozen "
+                         "probe-guard's rows are train-split, verified against "
+                         "the cached upstream arrows; the parquet API's split "
+                         "ordering is unstable, so the split is explicit)")
     ap.add_argument("--exclude", nargs="*", default=[],
                     help="jsonl glob(s) whose conversations must not be sampled")
     ap.add_argument("--seed", type=int, default=SEED)
@@ -304,8 +418,12 @@ def main():
         rows = build_guard(args, rng, banned)
 
     own = [row_hash(r["conversations"]) for r in rows]
-    assert len(own) == len(set(own)), "duplicate rows in output"
-    assert not (set(own) & pre_banned), "output overlaps banned set"
+    # explicit raises, not asserts: the disjointness contract must survive
+    # `python -O` (asserts are stripped under -O)
+    if len(own) != len(set(own)):
+        raise RuntimeError("duplicate rows in output")
+    if set(own) & pre_banned:
+        raise RuntimeError("output overlaps banned set")
 
     out = Path(args.out)
     if not out.is_absolute():
@@ -314,7 +432,19 @@ def main():
     with open(out, "w") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
+
+    # provenance sidecar: every upstream file this build read, hash-pinned;
+    # output path normalized the same way as source paths (no host leakage)
+    sidecar = out.with_suffix("").with_name(out.name + ".sources.json")
+    try:
+        out_loc = str(out.resolve().relative_to(ROOT))
+    except ValueError:
+        out_loc = str(out.resolve())
+    with open(sidecar, "w") as f:
+        json.dump({"mode": args.mode, "seed": args.seed, "output": out_loc,
+                   "sources": SOURCES}, f, indent=1)
     print(f"\n{args.mode}: {len(rows)} rows -> {out}")
+    print(f"sources manifest: {sidecar}")
     print("domains:", dict(Counter(
         "ML" if (r.get("domain") or "").startswith("belebele") else r.get("domain")
         for r in rows)))
