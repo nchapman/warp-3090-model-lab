@@ -21,7 +21,9 @@ torch/transformers than the quant stack):
 ```bash
 python3 -m venv .venv-quant   && .venv-quant/bin/pip  install -r requirements-quant.txt
 python3 -m venv .venv-dflash  && .venv-dflash/bin/pip install -r requirements-drafter.txt
-# + fp8 states (default): patch speculators with patches/speculators_fp8_load_cast.patch
+# + fp8 states (default): after the drafter venv installs, patch speculators in it:
+#   SP=$(./.venv-dflash/bin/python -c 'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
+#     && patch -p1 -d "$SP" < patches/speculators_fp8_load_cast.patch
 ```
 
 ## Hardware: train on Blackwell, deploy on Ampere
@@ -107,7 +109,7 @@ MTP 2.71. Measure the MTP baseline on your own ladder first
 | `calib-cascade-v1.jsonl` | champion calibration set (999 rows) |
 | `probe-v4.jsonl` | frozen 378-row fidelity ruler (the weightedKL metric) |
 | `probe-guard.jsonl` | OOD guard (no_robots + Belebele, 9 langs) |
-| `ladder-20.jsonl` | the 20 held-out eval prompts (the τ metric) |
+| `ladder-20.jsonl` | the 20 held-out eval prompts (the τ metric) — hash-banned from drafter training and disjoint from the probes; prompt texts do recur inside calib rows (shared upstream source) — affects no quoted number |
 | `conv-ids/` | conversation-id manifests for the v3/v4/v5 training slices |
 
 Derived from nvidia/Nemotron-Cascade-2-SFT-Data (+ no_robots / Belebele for

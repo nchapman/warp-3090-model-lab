@@ -1,6 +1,11 @@
 # Quantization stack — validated combo (GB10 Spark + B300, Oct 2026 runs).
 # Two venvs by design: speculators (drafter) pins a different torch/transformers.
-llmcompressor>=0.14.1          # validated: 0.14.1.dev27+gaf7967973
+# Quoted numbers were produced with the dev build 0.14.1.dev27+gaf7967973
+# (installed from git af7967973; not on PyPI). Fresh venvs resolve the latest
+# 0.14.1 pre-release instead; for bit-exact reproduction install that commit
+# from source. PEP 440: 0.14.1.dev27 < 0.14.1aN < 0.14.1 — the dev-anchored
+# lower bound admits the alphas, and the cap holds drift below 0.14.2.
+llmcompressor>=0.14.1.dev27,<0.14.2
 compressed-tensors==0.19.1a20261003
 auto-round==0.16.0
 accelerate==1.15.0

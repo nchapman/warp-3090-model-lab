@@ -1,12 +1,23 @@
-Patch: cast hidden_states to hidden_states_dtype at load (speculators/train/data.py).
-Enables fp8-e4m3fn on-disk storage of hidden states (half the bytes); bf16 datasets
-unaffected (.to(bf16) on bf16 is a no-op). Apply after pip install speculators==0.8.1
-(patch site-packages/speculators/train/data.py, class _get_raw_data):
-
-        hs = loaded_hs["hidden_states"].to(self.hidden_states_dtype)
-        return {
-            "hidden_states": hs[:, :-1].flatten(1),
-            "input_ids": loaded_hs["token_ids"],
-            "verifier_last_hidden_states": hs[:, -1],
-            "loss_mask": self.data[index]["loss_mask"],
-        }
+--- a/speculators/train/data.py
++++ b/speculators/train/data.py
+@@ -337,15 +337,12 @@
+                 reason=f"Cached token ids do not match sample {index}"
+             )
+ 
++        hs = loaded_hs["hidden_states"].to(self.hidden_states_dtype)
+         return {
+-            "hidden_states": loaded_hs["hidden_states"][:, :-1].flatten(
+-                1
+-            ),  # [seq_len, 3 * hidden_size]
+-            "input_ids": loaded_hs["token_ids"],  # [seq_len]
+-            "verifier_last_hidden_states": loaded_hs["hidden_states"][
+-                :, -1
+-            ],  # [seq_len, hidden_size]
+-            "loss_mask": self.data[index]["loss_mask"],  # [seq_len]
++            "hidden_states": hs[:, :-1].flatten(1),
++            "input_ids": loaded_hs["token_ids"],
++            "verifier_last_hidden_states": hs[:, -1],
++            "loss_mask": self.data[index]["loss_mask"],
+         }
+ 
+ 
