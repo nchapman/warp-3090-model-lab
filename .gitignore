@@ -14,7 +14,7 @@ ds_*/
 draft_init*/
 draft_v*/
 draft_reg/
-eval_*/
+eval_*
 *.log
 
 # raw data pools (downloaded by quant/build_calib.py, never in git)
