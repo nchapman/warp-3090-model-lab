@@ -1,10 +1,11 @@
-"""Upload the frozen data sets to the HF Hub mirror (nchapman/warp-3090-frozen-data).
+"""Upload the frozen data sets to the HF Hub mirror
+(nchapman/warp-3090-quant-lab-frozen-data).
 
 Dual-homing rationale (README data section): revision-hash citability,
 pull-by-pods without a repo clone, license/provenance surface via dataset card.
 Run in either venv (huggingface_hub is a dependency of both):
 
-  .venv-quant/bin/python scripts/upload_frozen_data.py [--repo nchapman/warp-3090-frozen-data]
+  .venv-quant/bin/python scripts/upload_frozen_data.py [--repo nchapman/warp-3090-quant-lab-frozen-data]
 
 Verifies MANIFEST.sha256 before uploading anything; aborts on drift.
 """
@@ -21,7 +22,7 @@ CARD = ROOT / "hf" / "frozen-data" / "README.md"
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--repo", default="nchapman/warp-3090-frozen-data")
+    ap.add_argument("--repo", default="nchapman/warp-3090-quant-lab-frozen-data")
     ap.add_argument("--public", action="store_true",
                     help="publish publicly (default: private repo)")
     ap.add_argument("--allow-nc-public", action="store_true",
