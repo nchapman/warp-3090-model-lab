@@ -25,7 +25,7 @@ rm -rf "$EVAL_DIR"; mkdir -p "$EVAL_DIR" "$(dirname "$RESULTS_CSV")"
 cp "$SRC"/config.json "$SRC"/model.safetensors "$EVAL_DIR"/
 cp "$SRC"/config.py "$EVAL_DIR"/ 2>/dev/null || true
 
-"$VENV/python" - "$EVAL_DIR/config.json" "$SPEC" "$VERIFIER_PATH" "$QUANT" << 'PYCFG'
+"$VENV/python" - "$EVAL_DIR/config.json" "$SPEC" "${VERIFIER_PATH:-}" "$QUANT" << 'PYCFG'
 import json, sys, os
 p, spec = sys.argv[1], sys.argv[2]
 c = json.load(open(p))

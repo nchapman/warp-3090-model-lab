@@ -291,6 +291,10 @@ def main():
 
     rng = random.Random(args.seed)
     banned = banned_hashes(args.exclude)
+    # `banned` is mutated during the build (selected rows are added so later
+    # subsets can't re-pick them) — snapshot the frozen+excludes hashes now;
+    # the output must be disjoint from THOSE, not from itself.
+    pre_banned = set(banned)
 
     if args.mode == "calib":
         rows = build_calib(args, rng, banned)
@@ -301,7 +305,7 @@ def main():
 
     own = [row_hash(r["conversations"]) for r in rows]
     assert len(own) == len(set(own)), "duplicate rows in output"
-    assert not (set(own) & banned), "output overlaps banned set"
+    assert not (set(own) & pre_banned), "output overlaps banned set"
 
     out = Path(args.out)
     if not out.is_absolute():

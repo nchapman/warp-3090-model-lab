@@ -2,9 +2,11 @@
 __pycache__/
 *.pyc
 .venv*/
+.pi/
 
 # run outputs
 runs/
+results/
 slices/
 states/
 hidden_states/
