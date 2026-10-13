@@ -1,0 +1,24 @@
+# python
+__pycache__/
+*.pyc
+.venv*/
+
+# run outputs
+runs/
+slices/
+states/
+hidden_states/
+ds_*/
+draft_init*/
+draft_v*/
+draft_reg/
+eval_*/
+*.log
+
+# raw data pools (downloaded by quant/build_calib.py, never in git)
+data-raw/
+
+# model weights
+*.safetensors
+*.bin
+Qwen3*/

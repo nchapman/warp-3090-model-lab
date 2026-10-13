@@ -1,0 +1,12 @@
+# Drafter stack — validated combo (kit/requirements-pod.txt, v3-v5 runs:
+# GB10 Spark sm_121 + B200 sm_10x). Apply patches/speculators_fp8_load_cast.patch
+# to speculators if you store states as fp8 (the default in extract_states.py).
+#
+# attn impl per machine (see drafter/train.md): B200 -> simple_flex_attention,
+# Spark sm_121 -> sdpa (flex Triton kernels exceed its shared memory).
+speculators==0.8.1
+vllm==0.31.0
+torch==2.13.0
+transformers==5.16.1
+datasets==5.0.1
+safetensors==0.8.0
