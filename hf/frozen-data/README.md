@@ -60,6 +60,17 @@ carried here for transparency:
   [facebook/belebele](https://huggingface.co/datasets/facebook/belebele):
   CC-BY-SA-4.0
 
+## Where each set is used
+
+All frozen sets are pairwise hash-disjoint (builders enforce it). The guard
+is consumed by no other process — pure held-out referee.
+
+| process | uses |
+|---|---|
+| quantization (GPTQ) | calib-cascade-v1 only |
+| drafter training | cascade prompts via conv-ids presets, assistant turns rewritten by the deployed quant (regen) — never the original assistant text, never bf16 |
+| evaluation | probe-v4 → weightedKL headline; probe-guard → OOD check; ladder-20 → τ headline + checkpoint selection |
+
 ## Reproduction
 
 These sets are *anchors, not regenerable outputs*: the repo's builders

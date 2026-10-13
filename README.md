@@ -122,6 +122,20 @@ breaks cross-run comparability. Verify your checkout:
 | `conv-ids/` | conversation-id manifests for the v3/v4/v5 training slices | exact `slice_convs.py` preset outputs — deterministically reproducible (seeds, per-subset rounding, val sampling all verified against the manifests) |
 | `MANIFEST.sha256` | hash pin for everything above | `find . -type f ! -name MANIFEST.sha256 \| sort \| sed 's|^\./||' \| xargs sha256sum` (prefix-free so `sha256sum -c` and the uploader's set check both round-trip) |
 
+**Where each set is used** — three processes, three roles, deliberately
+walled off (all frozen sets pairwise hash-disjoint; builders enforce it):
+
+| process | uses | notes |
+|---|---|---|
+| quantization (`quant/quantize.py`) | `calib-cascade-v1` only | activations decide GPTQ grouping; no_robots/Belebele never enter — keeps the guard honest |
+| drafter training (`drafter/slice_convs.py` → `regen.py` → …) | cascade pool prompts via `conv-ids` presets | slices hash-banned from every frozen set; `regen.py` rewrites assistant turns with the deployed quant — training data is quant-written completions + quant states, never cascade's original assistant text, never bf16 |
+| evaluation (`quant/probe.py`, `drafter/eval_ladder.sh`) | `probe-v4` → headline weightedKL; `probe-guard` → OOD anti-gaming check; `ladder-20` → headline τ + per-epoch checkpoint selection | ladder-20 is hash-banned from training; probe-guard is consumed by nothing — pure held-out referee |
+
+One documented exception: ladder-20 prompt texts recur inside calib rows (both
+cascade-derived) — τ compares drafters against the same target model, so the
+overlap can't game it. `regression.sh` regenerates its own smoke dataset and
+never reads `data/`.
+
 **Reproducibility contract.** `quant/build_calib.py` builds *new* sets of each
 calib/probe/guard kind — always hash-disjoint from the frozen ones (freshness
 by design, not regeneration). Every build writes a `<out>.sources.json` sidecar
@@ -139,7 +153,7 @@ Belebele rows → CC-BY-SA-4.0. Regen outputs are Qwen model outputs.
 **HF mirror:** the frozen sets are dual-homed at
 `nchapman/warp-3090-quant-lab-frozen-data` (**public**, CC-BY-NC-4.0 top-level
 per the card — non-commercial research use; see license note above). Pinned at
-commit `8d550390`, verify against
+commit `8e38aa4`, verify against
 `data/MANIFEST.sha256` after pulling). Good reason to freeze *on the Hub*
 rather than git alone: revision-hash citability, pull-by-pods without a repo
 clone, and a license/provenance surface git can't provide. Big artifacts (v4
