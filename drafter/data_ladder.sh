@@ -37,9 +37,10 @@ need_gb=$(( MILL * 16 ))  # KB->GB with headroom
 free_gb=$(df -BG --output=avail . | tail -1 | tr -dc '0-9')
 (( free_gb >= need_gb )) || finish_fail "disk: need ~${need_gb}GB, have ${free_gb}GB"
 
-# GPU must be free (no leftover server/training holding memory)
-used_mb=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1)
-(( used_mb < 2048 )) || finish_fail "gpu busy: ${used_mb}MB already in use"
+# GPU must be free — GB10's nvidia-smi reports [N/A] for memory, so check
+# for processes holding the device instead
+used_pids=$(fuser /dev/nvidia0 2>/dev/null | tr -s ' ')
+[[ -z $used_pids ]] || finish_fail "gpu busy: pids=$used_pids hold /dev/nvidia0"
 
 # 1) slice — nested, conv-grouped, deterministic
 if [[ ! -f "$WORK/rung_$NAME.jsonl" ]]; then
