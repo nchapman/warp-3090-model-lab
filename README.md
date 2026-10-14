@@ -12,8 +12,9 @@ What this repo reproduces (see `RESULTS.md` for all numbers):
   upgrades, 3.8-only — all one architecture class) with the cascade
   calibration blend: weightedKL 0.1087 (4B) / 0.0889 (9B) / 0.1264 (27B).
 - **Drafters**: quant-aligned DFlash2 block-diffusion speculative drafters —
-  the 4B champion hits τ 3.443 (interval-weighted acceptance, block 16) vs
-  full native MTP 2.71 on the same ladder.
+  the 4B drafter hits τ 3.79 at the serving point (interval-weighted
+  acceptance, block 16, temp 0.7) / 4.05 greedy, vs full native MTP 2.86 /
+  2.99 on the same ladder.
 
 Plain scripts, no package. Two venvs (the speculators stack pins different
 torch/transformers than the quant stack):
@@ -34,12 +35,13 @@ python3 -m venv .venv-dflash  && .venv-dflash/bin/pip install -r requirements-dr
 | **RunPod B200/B300** | big rungs — same scripts, faster (`bash pod.sh push && pod.sh run`) |
 | **3090 / Ampere** | deployment target — the quant format is the contract; acceptance is portable, throughput is not |
 
-Why this split is safe (measured, see `docs/history`): the same checkpoint
-scored τ 3.250 trained/served on B200 vs 3.242 on GB10 (σ≈0.01 — acceptance
-is a distribution property, not a kernel property); W4A16 GPTQ weights are
+Why this split is safe (see `docs/history` + `RESULTS.md`): acceptance is a
+distribution property, not a kernel property; W4A16 GPTQ weights are
 deterministic given calibration data and serve identically on sm_86. Never
 quote throughput for warp-3090 claims from Blackwell hardware — measure that
-on a 3090. Attention impl per machine: `simple_flex_attention` on B200,
+on a 3090. (Don't lean on cross-machine τ comparisons either — single-draw
+τ noise swamps hardware deltas; the anchor numbers in `RESULTS.md` are all
+GB10.) Attention impl per machine: `simple_flex_attention` on B200,
 `sdpa` on Spark (flex Triton kernels exceed sm_121 shared memory) — see
 `drafter/train.md`.
 
@@ -54,7 +56,7 @@ MANIFEST.sha256 --quiet)` locally; hash pulled artifacts yourself) → teardown.
 
 | key | model | gen | layers/hidden | taps (aux+final) | quant | drafter |
 |---|---|---|---|---|---|---|
-| `4b` | Qwen/Qwen3.5-4B | 3.5 | 32 / 2560 | [2,10,17,24,29]+32 | ✅ 0.1087 | ✅ τ 3.443 |
+| `4b` | Qwen/Qwen3.5-4B | 3.5 | 32 / 2560 | [2,10,17,24,29]+32 | ✅ 0.1087 | ✅ τ 3.79 |
 | `9b` | Qwen/Qwen3.5-9B | 3.5 | 32 / 4096 | same depth | ✅ 0.0889 | ⬜ untested |
 | `27b` | Qwen/Qwen3.8-27B | 3.8 | 64 / 5120 | [2,17,32,47,61]+64 | ✅ 0.1264 | ⬜ NO-GO |
 
@@ -98,10 +100,13 @@ and states must be **N+1 taps** (aux + final; `--model` fills this for you).
 
 Same sequence with `--preset v4` (100k convs → 260M tokens; fp8 6-tap states
 ≈ 3.2TB — disk is the gating resource), then both train arms from
-`drafter/train.md` at checkpoint-freq 1, **ladder-eval every epoch**, keep the
-best (champion = armB epoch 2). Expected: τ 3.443 b16 / 3.131 b8 vs native
-MTP 2.71. Measure the MTP baseline on your own ladder first
-(`drafter/train.md`) — published MTP numbers are harness-specific.
+`drafter/train.md` at checkpoint-freq 1. Expect τ ≈ 3.8 at the serving point
+(temp 0.7) vs native MTP ≈ 2.9 — measure the MTP baseline on your own ladder
+first (`drafter/train.md`); published MTP numbers are harness-specific.
+Checkpoint selection: **rank at the serving temperature** (`TEMP=0.7`, n≥4
+per contender) — τ rises monotonically to end-of-training at 0.7, but the
+ranking is temperature-dependent (greedy peaks mid-run); never rank on
+single draws (see the measurement protocol in `AGENTS.md`).
 
 ## Data (frozen, in git under `data/`)
 

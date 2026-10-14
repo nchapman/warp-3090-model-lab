@@ -1,5 +1,16 @@
 # DFlash2 drafter research — exploration #1 (Qwen3.5-4B target)
 
+> **Erratum (2026-10-14, GB10 re-measurement).** The conclusions below were
+> drawn with a measurement instrument that could not support them: pod-era
+> τ rankings were single draws at temp 1.0 (heavy-tailed — 0.34 spread
+> observed on identical inputs), and the "epoch-2 peak / select by ladder"
+> result did not reproduce. Re-measured across three temperatures with
+> repeats (`RESULTS.md`, "GB10 anchor measurements"): ranking is
+> temperature-dependent — at the serving point (t=0.7, the corpus generation
+> config) τ rises monotonically to end-of-training; under greedy an
+> epoch-4 snapshot peaks. The shipped drafter is end-of-training, selected at
+> the serving temperature. The text below stands as the historical record.
+
 Status: research complete, draft-init built, vLLM stack validated on GB10.
 Sources fetched 2026-10-10: speculators train CLI docs, speculators DFlash
 algorithm guide, vLLM speculators v0.5.0 blog, NeMo AutoModel DFlash recipe
