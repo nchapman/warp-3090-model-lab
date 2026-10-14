@@ -57,15 +57,19 @@ launch_server "$LOG" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
   || finish_fail "stage=server-launch"
 wait_healthy "$PORT" || finish_fail "stage=health"
 
-# DFlash2 convention: temp 1.0 / top_p 0.95 / top_k 20, max 250 tok, conc 8
-log_event PROMPTS_START "n=20"
-"$VENV/python" - "$PORT" "$LADDER" << 'PY' >> "$OUT" 2>&1
+# DFlash2 convention: temp 1.0 / top_p 0.95 / top_k 20, max 250 tok, conc 8.
+# TEMP=0 (greedy) is the variance-reduced SELECTION instrument: temp-1.0 τ is
+# heavy-tailed (observed 0.34 spread on identical inputs) and cannot rank
+# 0.1-τ differences at small n; greedy ranks checkpoints ~noise-free.
+TEMP=${TEMP:-1.0}
+log_event PROMPTS_START "n=20 temp=$TEMP"
+"$VENV/python" - "$PORT" "$LADDER" "$TEMP" << 'PY' >> "$OUT" 2>&1
 import concurrent.futures, json, sys, urllib.request
-port, ladder = sys.argv[1], sys.argv[2]
+port, ladder, temp = sys.argv[1], sys.argv[2], float(sys.argv[3])
 prompts = [json.loads(l) for l in open(ladder)]
 def hit(p):
     body = json.dumps({"messages": p["messages"], "max_tokens": 250,
-                       "temperature": 1.0, "top_p": 0.95, "top_k": 20}).encode()
+                       "temperature": temp, "top_p": 0.95, "top_k": 20}).encode()
     req = urllib.request.Request(f"http://localhost:{port}/v1/chat/completions", body,
                                  {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=600) as r:
@@ -84,9 +88,9 @@ while (( SECONDS - _t0 < 60 )); do
   (( _quiet >= 2 )) && break
   _prev=$_n; sleep 5
 done
-"$VENV/python" - "$LOG" "$NAME" "$RESULTS_CSV" "$SPEC" << 'PYMETRIC' >> "$OUT" 2>&1
+"$VENV/python" - "$LOG" "$NAME" "$RESULTS_CSV" "$SPEC" "$TEMP" << 'PYMETRIC' >> "$OUT" 2>&1
 import csv, re, sys
-log, name, csv_path, spec = sys.argv[1:5]
+log, name, csv_path, spec, temp = sys.argv[1:6]
 pat = re.compile(r"Mean acceptance length: ([0-9.]+),.*Accepted: (\d+) tokens")
 a = t = 0
 for line in open(log, errors="ignore"):
@@ -96,7 +100,7 @@ for line in open(log, errors="ignore"):
         a += acc * tok; t += tok
 tau = a / t if t else 0.0
 print(f"TAU {name} {tau:.3f} accepted={t}")
-row = [name, f"spec={spec}", str(t), f"{tau:.3f}", "20prompt temp1.0 interval-weighted"]
+row = [name, f"spec={spec}", str(t), f"{tau:.3f}", f"20prompt temp{temp} interval-weighted"]
 new = True
 try:
     rows = list(csv.reader(open(csv_path)))

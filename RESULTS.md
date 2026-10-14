@@ -56,6 +56,43 @@ recorded here.
 - vLLM hidden-state extraction on W4A16: NaN tails + silently-wrong states
   (transformers-only extraction is mandatory, hardware-independent).
 - Selecting checkpoints by val loss at high LR: val loss improves while
-  acceptance declines — select by ladder, always.
+  acceptance declines — select by ladder, always. And select on the
+  **greedy** ladder: temp-1.0 τ is heavy-tailed (0.34 spread observed on
+  identical inputs); greedy repeat spread is ~0.05.
+
+
+## GB10 anchor measurements (2026-10-14, runlib-era, fresh numbers only)
+
+Ladder-20, interval-weighted τ, W4A16-GPTQ verifier unless noted; all runs
+under `runs/` with full event trails (`scripts/tail_run.sh`).
+
+Greedy (temp 0 — selection instrument):
+
+| checkpoint | τ |
+|---|---|
+| epoch 4 | **4.19** (n=2: 4.218 / 4.171) |
+| epoch 6 (end of training) | 4.07 |
+| epoch 2 | 3.73 |
+| epoch 1 | 2.95→3.52* |
+| epoch 4 @ bf16 base | 4.15 |
+| native MTP k=3 | 2.99 |
+
+Temp 1.0 (deployment metric — heavy-tailed, ±0.2):
+
+| checkpoint | τ |
+|---|---|
+| epoch 4 | 3.27 (n=2: 3.441 / 3.099) |
+| epoch 6 | 3.25 (n=2) |
+| epoch 6 @ bf16 base | 3.32 |
+| epoch 2 | 3.17 (n=2) |
+| native MTP k=3 | 2.66 |
+
+\* epoch-1 temp-1.0 run measured 2.954 pre-`TEMP` support; greedy 3.516.
+
+Conclusions: acceptance peaks at epoch 4 of 6 and declines by epoch 6
+(training longer does not help); the shipped drafter
+(`nchapman/Qwen3.5-4B-DFlash2`) is the epoch-4 checkpoint, selected on the
+greedy ladder after the temp-1.0 instrument proved unable to rank
+0.1-τ differences at small n.
 
 Full narrative: `docs/history/dflash2_research.md`, `docs/history/calib_v2_plan.md`.

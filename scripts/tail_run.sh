@@ -9,7 +9,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUNS_DIR=${RUNS_DIR:-$ROOT/runs}
 shopt -s nullglob
 if [[ $# -ge 1 ]]; then
-  dirs=("$RUNS_DIR/$1".*)
+  dirs=("$RUNS_DIR"/$1*)
 else
   dirs=("$RUNS_DIR"/*)
 fi
