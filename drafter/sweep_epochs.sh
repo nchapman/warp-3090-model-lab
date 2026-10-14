@@ -41,6 +41,7 @@ for d in "$PARENT"/*/; do
 done
 (( ${#epochs[@]} >= 2 )) || { log_event SWEEP_FAILED "reason=need>=2 checkpoint dirs with model.safetensors"; finish_fail "reason=no-epochs"; }
 log_event SWEEP_START "epochs=${#epochs[@]} temp=$TEMP"
+SWEEP_FAILED=0
 
 # results.csv lives in the sweep run dir — self-contained, no /tmp litter
 RESULTS_CSV="$RUN_DIR/results.csv"
