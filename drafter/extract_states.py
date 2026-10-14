@@ -50,6 +50,9 @@ def parse_args():
                         "(cos >= 0.9997; needs patches/speculators_fp8_load_cast.patch)")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--max-batch-tokens", type=int, default=16384)
+    p.add_argument("--max-batch-rows", type=int, default=16,
+                   help="row cap per forward batch — raise for better GPU "
+                        "utilization (data-scaling ladder benchmark)")
     p.add_argument("--writers", type=int, default=4)
     p.add_argument("--resume", action="store_true",
                    help="skip rows whose existing file already has the right tap count")
@@ -146,7 +149,7 @@ def main():
 
     for i, t in rows:
         b_ids.append(t); b_meta.append((i, t))
-        if sum(x.numel() for x in b_ids) > args.max_batch_tokens or len(b_ids) >= 16:
+        if sum(x.numel() for x in b_ids) > args.max_batch_tokens or len(b_ids) >= args.max_batch_rows:
             flush_blocking()
     flush_blocking()
     for f in pending:
