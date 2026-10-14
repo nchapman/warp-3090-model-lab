@@ -19,7 +19,7 @@ selected at the serving temperature.
 | config | τ, greedy (t=0) | τ, t=0.7 (serving) | τ, t=1.0 |
 |---|---|---|---|
 | [Qwen3.5-4B-W4A16-GPTQ](https://huggingface.co/nchapman/Qwen3.5-4B-W4A16-GPTQ) verifier (training verifier) | 4.05 (n=2) | **3.79** (n=4: 3.71–3.85) | 3.25 (n=2) |
-| Qwen3.5-4B bf16 base | — | — | 3.32 |
+| Qwen3.5-4B bf16 base | — | **3.75** | 3.32 |
 | native MTP k=3 (baseline, same ladder) | 2.99 | 2.86 | 2.66 |
 
 Beats the model's native MTP by **~+1 τ at every temperature** in every

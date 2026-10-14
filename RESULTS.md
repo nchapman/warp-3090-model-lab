@@ -72,7 +72,7 @@ under `runs/` with full event trails (`scripts/tail_run.sh`).
 | epoch 2 | 3.73 | 3.49 | 3.17 (n=2) |
 | epoch 4 | 4.20 (n=2) | 3.68 (n=4: 3.58-3.75) | 3.27 (n=2, spread 0.34) |
 | epoch 6 — shipped | 4.05 (n=2) | **3.79** (n=4: 3.71-3.85) | 3.25 (n=2) |
-| epoch 6 @ bf16 base | — | — | 3.32 |
+| epoch 6 @ bf16 base | — | 3.75 | 3.32 |
 | epoch 4 @ bf16 base | 4.15 | — | — |
 | native MTP k=3 | 2.99 | 2.86 | 2.66 |
 
