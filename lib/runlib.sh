@@ -29,6 +29,8 @@ run_init() {
     echo "# cmd: ${RUN_CMD:-$0 $(printf '%q ' "$@")}"
   } > "$RUN_DIR/cmd.txt"
   log_event RUN_START "name=$RUN_NAME" "dir=$RUN_DIR"
+  RUN_FINISHED=0
+  trap '_runlib_on_exit' EXIT
 }
 
 # log_event <TYPE> [key=value]... — JSON to events.jsonl, human line to stderr.
@@ -81,7 +83,7 @@ launch_server() {
   # a killed/interrupted script must not leak the nohup'd server; INT/TERM
   # also EXIT (cleanup alone would let the script continue headless)
   SERVER_STOPPED=0
-  trap '[[ ${SERVER_PID:-} && $SERVER_STOPPED == 0 ]] && stop_server' EXIT
+  trap '_runlib_on_exit' EXIT
   trap '[[ ${SERVER_PID:-} && $SERVER_STOPPED == 0 ]] && stop_server; exit 130' INT
   trap '[[ ${SERVER_PID:-} && $SERVER_STOPPED == 0 ]] && stop_server; exit 143' TERM
   log_event SERVER_LAUNCH "pid=$SERVER_PID" "log=$SERVER_LOG"
@@ -155,5 +157,17 @@ stop_server() {
   fi
 }
 
-finish_ok()  { log_event RUN_DONE  "status=ok" "$@"; }
-finish_fail() { stop_server 2>/dev/null || true; log_event RUN_FAILED "status=fail" "$@"; exit 1; }
+RUN_FINISHED=0   # finish_ok/finish_fail set this; the EXIT trap logs any other exit
+
+finish_ok()  { RUN_FINISHED=1; log_event RUN_DONE  "status=ok" "$@"; }
+finish_fail() { RUN_FINISHED=1; stop_server 2>/dev/null || true; log_event RUN_FAILED "status=fail" "$@"; exit 1; }
+
+# composed EXIT handler: server cleanup (launch_server arms this too) plus a
+# terminal event for deaths that bypass finish_* (set -e kills, unhandled errors)
+_runlib_on_exit() {
+  local rc=$?
+  [[ ${SERVER_PID:-} && ${SERVER_STOPPED:-1} == 0 ]] && stop_server
+  if [[ ${RUN_FINISHED:-0} == 0 && $rc -ne 0 ]]; then
+    log_event RUN_FAILED "status=fail unexpected_exit=$rc"
+  fi
+}

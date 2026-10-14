@@ -69,6 +69,7 @@ fi
 # 4) optional batch-cap benchmark on 300 rows (fresh ds only)
 BATCH_ROWS=${LADDER_ROWS:-64}
 BATCH_TOKENS=${LADDER_TOKENS:-65536}
+[[ -f "$WORK/bench.env" ]] && source "$WORK/bench.env"   # persisted benchmark winner
 if [[ ${LADDER_BENCH:-0} == 1 ]]; then
   bench="$RUN_DIR/bench.log"; : > "$bench"
   best=0
@@ -79,7 +80,7 @@ if [[ ${LADDER_BENCH:-0} == 1 ]]; then
       --verifier "$QUANT" --model 4b --out "$WORK/bench_tmp" --limit 300 \
       --max-batch-tokens "$bt" --max-batch-rows "$br" \
       > "$RUN_DIR/bench_${br}.log" 2>&1 || finish_fail "stage=bench cfg=$br"
-    rate=$(grep -o '[0-9.]* rows/s' "$RUN_DIR/bench_${br}.log" | tail -1)
+    rate=$( { grep -o '[0-9.]* rows/s' "$RUN_DIR/bench_${br}.log" | tail -1 || true; } )
     rate=${rate% rows/s}
     echo "batch_tokens=$bt batch_rows=$br rate=${rate:-0}" | tee -a "$bench"
     awk -v r="${rate:-0}" -v b="$best" 'BEGIN{exit !(r>b)}' && best=$rate && BATCH_ROWS=$br && BATCH_TOKENS=$bt
@@ -90,11 +91,12 @@ if [[ ${LADDER_BENCH:-0} == 1 ]]; then
 EOF
   rm -rf "$WORK/bench_tmp"
   log_event LADDER_BENCH "winner_rows=$BATCH_ROWS winner_tokens=$BATCH_TOKENS best_rate=$best"
+  printf 'BATCH_ROWS=%s\nBATCH_TOKENS=%s\n' "$BATCH_ROWS" "$BATCH_TOKENS" > "$WORK/bench.env"
 fi
 
 # 5) extract states (resume-safe; parity gate on 20 files)
 nrows=$(wc -l < "$WORK/rung_$NAME.jsonl")
-nhs=$(ls "$WORK/ds_$NAME/hidden_states" 2>/dev/null | wc -l)
+nhs=$( { ls "$WORK/ds_$NAME/hidden_states" 2>/dev/null || true; } | wc -l)
 if (( nhs < nrows )); then
   "$VENV/bin/python" drafter/extract_states.py --dataset "$WORK/ds_$NAME" \
     --verifier "$QUANT" --model 4b --out "$WORK/ds_$NAME" \
