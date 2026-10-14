@@ -19,6 +19,8 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/lib/runlib.sh"
 SRC=$1; NAME=$2; SPEC=$3; PORT=$4
+[[ $SPEC =~ ^[0-9]+$ && $SPEC -ge 1 && $SPEC -le 32 ]] \
+  || { echo "SPEC must be 1-32 (speculative tokens), got: $SPEC" >&2; exit 1; }
 EVAL_DIR=${EVAL_DIR:-$ROOT/eval_$NAME}
 LOG=${LOG:-$ROOT/vllm_eval_${NAME}.log}
 OUT=${OUT:-$ROOT/eval_${NAME}.out}

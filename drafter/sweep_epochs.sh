@@ -24,6 +24,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/lib/runlib.sh"
 
 PARENT=$1; NAME=$2; SPEC=${3:-15}; PORT=${4:-8200}
+[[ $SPEC =~ ^[0-9]+$ && $SPEC -ge 1 && $SPEC -le 32 ]] \
+  || { echo "SPEC must be 1-32 (speculative tokens), got: $SPEC" >&2; exit 1; }
 TEMP=${TEMP:-0.7}
 SWEEP_TOPK=${SWEEP_TOPK:-2}
 SWEEP_REPEATS=${SWEEP_REPEATS:-3}
@@ -52,7 +54,7 @@ tau_of() { awk -F, -v l="$1" '$1==l {v=$4} END {print v}' "$RESULTS_CSV"; }
 mean_of() { grep "^$1," "$RESULTS_CSV" | awk -F, '{s+=$4; n++} END {printf "%.3f %d", s/n, n}'; }
 
 run_epoch() {  # run_epoch <dir> <label>
-  local child="$RUN_DIR/child-${label}.log"
+  local child="$RUN_DIR/child-$2.log"
   if ! VERIFIER_PATH="$VERIFIER_PATH" RESULTS_CSV="$RESULTS_CSV" TEMP="$TEMP" \
       bash "$ROOT/drafter/eval_ladder.sh" "$1" "$2" "$SPEC" "$PORT" >"$child" 2>&1; then
     log_event SWEEP_EPOCH_FAILED "label=$2 dir=$1 child_log=$child"
@@ -67,6 +69,7 @@ run_epoch() {  # run_epoch <dir> <label>
 
 echo "== round 1: one ladder per epoch (temp $TEMP) =="
 for d in "${epochs[@]}"; do run_epoch "$d" "$NAME-$(basename "$d")"; done
+[[ -s "$RESULTS_CSV" ]] || finish_fail "reason=no-round1-results (every epoch eval failed — see child-*.log)"
 
 echo "== round 2: $SWEEP_REPEATS extra runs on top $SWEEP_TOPK =="
 mapfile -t top < <(awk -F, -v p="$NAME-" 'index($1, p)==1 {print $4, $1}' "$RESULTS_CSV" \
@@ -78,7 +81,7 @@ for label in "${top[@]}"; do
   for ((r=1; r<=SWEEP_REPEATS; r++)); do run_epoch "$d" "${label}r$r"; done
   # rename repeat rows so pooled stats key on the base label (exact string
   # match, no regex interpolation of the label)
-  "$VENV/python" - "$RESULTS_CSV" "$label" << 'PYREN'
+  "$VENV/python" - "$RESULTS_CSV" "$label" << 'PYREN' || finish_fail "stage=rename label=$label"
 import os, sys
 csv_path, label = sys.argv[1], sys.argv[2]
 lines = open(csv_path).readlines()
