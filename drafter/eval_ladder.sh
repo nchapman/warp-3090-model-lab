@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC=$1; NAME=$2; SPEC=$3; PORT=$4
 EVAL_DIR=${EVAL_DIR:-$ROOT/eval_$NAME}
 LOG=${LOG:-$ROOT/vllm_eval_${NAME}.log}
-OUT=$ROOT/eval_${NAME}.out
+OUT=${OUT:-$ROOT/eval_${NAME}.out}
 RESULTS_CSV=${RESULTS_CSV:-$ROOT/results/results.csv}
 VENV=${VENV:-$ROOT/.venv-dflash/bin}
 QUANT=${QUANT_PATH:-${QUANT:-nchapman/Qwen3.5-4B-W4A16-GPTQ}}

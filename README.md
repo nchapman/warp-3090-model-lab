@@ -161,9 +161,10 @@ clone, and a license/provenance surface git can't provide.
 **Published models (one recipe each, no version zoo):** the champion quants
 live at the `quant_repo` ids in `models.py` (`nchapman/Qwen3.5-4B-W4A16-GPTQ`,
 `…-9B…`, `nchapman/Qwen3.8-27B-W4A16-GPTQ` — each card pins the calibration
-generation as `calib-cascade-v1`). The champion drafter (v4 armB epoch 2,
-τ 3.443 b16 / 3.131 b8) lives at
-`nchapman/warp-3090-quant-lab-drafter` (weights sha256 in the card). Earlier
+generation as `calib-cascade-v1`). The champion drafter lives at
+`nchapman/Qwen3.5-4B-DFlash2` (standard speculators naming — model it drafts
+for, no quant marker: measured drafting against both the quant verifier and
+the bf16 base; weights sha256 in the card). Earlier
 drafter generations (v3, v3.5), the v4 per-epoch snapshots, and the regen
 corpus stay local research record under `../llm-compressor/artifacts/` —
 rebuildable via this repo's pipeline, deliberately not published.
@@ -173,6 +174,13 @@ rebuildable via this repo's pipeline, deliberately not published.
 (`calib-cascade-v1`). The Hub repos use the bare ids and carry only the
 current generation; the citable version reference is the frozen-data pin, not
 a repo-name suffix.
+
+**Models & cache:** Hub ids are the canonical model references (`models.py`
+resolves them); anything pulled from the Hub lands in the standard
+`~/.cache/huggingface` — the repo sets no custom cache dirs and keeps no
+local model copies. `quantize.py` outputs and eval working copies
+(`eval_*/`, `Qwen3*/`) are transient, gitignored, and disposable: upload what
+you keep, delete the rest.
 
 ## Layout
 
