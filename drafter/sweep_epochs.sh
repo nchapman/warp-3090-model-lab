@@ -44,7 +44,7 @@ log_event SWEEP_START "epochs=${#epochs[@]} temp=$TEMP"
 # results.csv lives in the sweep run dir — self-contained, no /tmp litter
 RESULTS_CSV="$RUN_DIR/results.csv"
 
-tau_of() { grep "^$1," "$RESULTS_CSV" | tail -1 | awk -F, '{print $4}'; }
+tau_of() { awk -F, -v l="$1" '$1==l {v=$4} END {print v}' "$RESULTS_CSV"; }
 mean_of() { grep "^$1," "$RESULTS_CSV" | awk -F, '{s+=$4; n++} END {printf "%.3f %d", s/n, n}'; }
 
 run_epoch() {  # run_epoch <dir> <label>
@@ -65,15 +65,27 @@ echo "== round 1: one ladder per epoch (temp $TEMP) =="
 for d in "${epochs[@]}"; do run_epoch "$d" "$NAME-$(basename "$d")"; done
 
 echo "== round 2: $SWEEP_REPEATS extra runs on top $SWEEP_TOPK =="
-mapfile -t top < <(awk -F, -v p="$NAME-" '$1 ~ "^"p {print $4, $1}' "$RESULTS_CSV" \
+mapfile -t top < <(awk -F, -v p="$NAME-" 'index($1, p)==1 {print $4, $1}' "$RESULTS_CSV" \
                   | sort -rn | head -"$SWEEP_TOPK" | awk '{print $2}')
 for label in "${top[@]}"; do
   d=""
   for e in "${epochs[@]}"; do [[ "$NAME-$(basename "$e")" == "$label" ]] && d=$e; done
   [[ -n "$d" ]] || continue
   for ((r=1; r<=SWEEP_REPEATS; r++)); do run_epoch "$d" "${label}r$r"; done
-  # rename repeat rows so pooled stats key on the base label
-  sed -i "s/^${label}r[0-9]*,/${label},/" "$RESULTS_CSV"
+  # rename repeat rows so pooled stats key on the base label (exact string
+  # match, no regex interpolation of the label)
+  "$ROOT/.venv-dflash/bin/python" - "$RESULTS_CSV" "$label" << 'PYREN'
+import sys
+csv_path, label = sys.argv[1], sys.argv[2]
+lines = open(csv_path).readlines()
+out = []
+for l in lines:
+    head = l.split(",", 1)[0]
+    if head.startswith(label + "r") and head[len(label)+1:].isdigit():
+        l = label + "," + l.split(",", 1)[1]
+    out.append(l)
+open(csv_path, "w").writelines(out)
+PYREN
 done
 
 echo "== ranked (pooled means, temp $TEMP) =="
@@ -82,11 +94,11 @@ echo "== ranked (pooled means, temp $TEMP) =="
   echo
   echo "| rank | checkpoint | τ mean | n |"
   echo "|---|---|---|---|"
-  awk -F, -v p="$NAME-" '$1 ~ "^"p {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%s %.3f %d\n", k, s[k]/n[k], n[k]}' \
+  awk -F, -v p="$NAME-" 'index($1, p)==1 {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%s %.3f %d\n", k, s[k]/n[k], n[k]}' \
     "$RESULTS_CSV" | sort -k2 -rn | awk '{printf "| %d | %s | **%s** | %s |\n", NR, $1, $2, $3}'
 } | tee "$RUN_DIR/summary.md"
 
-winner=$(awk -F, -v p="$NAME-" '$1 ~ "^"p {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%.4f %s\n", s[k]/n[k], k}' \
+winner=$(awk -F, -v p="$NAME-" 'index($1, p)==1 {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%.4f %s\n", s[k]/n[k], k}' \
   "$RESULTS_CSV" | sort -rn | head -1 | awk '{print $2}')
 [[ -z "$winner" ]] && finish_fail "reason=no-successful-epochs failed=$SWEEP_FAILED"
 finish_ok "winner=$winner epochs=${#epochs[@]} temp=$TEMP failed=${SWEEP_FAILED:-0}"

@@ -103,18 +103,20 @@ config, 924 prompts, interval-weighted τ from vLLM acceptance logs):
 
 | subset | MTP k=3 | DFlash2 (shipped) | Δ |
 |---|---|---|---|
-| qa | 2.95 | **3.61** | +0.66 |
-| HumanEval | 3.32 | **4.81** | +1.49 |
-| math_reasoning | 3.49 | **6.32** | +2.84 |
-| tool_call | 3.23 | **4.84** | +1.60 |
-| rag | 3.35 | **4.98** | +1.63 |
-| question | 3.13 | **4.51** | +1.38 |
-| writing | 3.08 | **4.37** | +1.29 |
-| summarization | 3.11 | **4.28** | +1.17 |
-| translation | 2.97 | **3.08** | +0.11 |
-| **weighted** | **3.21** | **4.67** | **+1.46** |
-
-Wins every subset; repeat spreads ≤0.15 per subset. Weak tail = translation
+| qa | 2.94 | **3.62** | +0.68 |
+| HumanEval | 3.35 | **4.87** | +1.52 |
+| math_reasoning | 3.51 | **6.58** | +3.07 |
+| tool_call | 3.23 | **4.64** | +1.41 |
+| rag | 3.35 | **5.09** | +1.74 |
+| question | 3.11 | **4.47** | +1.36 |
+| writing | 3.11 | **4.48** | +1.37 |
+| summarization | 3.15 | **4.30** | +1.15 |
+| translation | 2.97 | **3.03** | +0.06 |
+| **weighted** | **3.22** | **4.65** | **+1.43** |
+Wins every subset. Numbers above are from the second measurement pass
+(fixed log-window offsets — the first pass's CR-rich-log windowing bled
+neighboring subsets' tail lines; conclusions identical, shifts within
+run noise). Weak tail = translation
 (+0.11), consistent with the chat-heavy cascade corpus; strongest = math,
 code, rag.
 

@@ -92,6 +92,7 @@ done
 "$VENV/python" - "$LOG" "$NAME" "$RESULTS_CSV" "$SPEC" "$TEMP" << 'PYMETRIC' >> "$OUT" 2>&1
 import csv, re, sys
 log, name, csv_path, spec, temp = sys.argv[1:6]
+temp = float(temp)
 pat = re.compile(r"Mean acceptance length: ([0-9.]+),.*Accepted: (\d+) tokens")
 a = t = 0
 for line in open(log, errors="ignore"):

@@ -16,8 +16,14 @@ grep -q 'Confirmed category profile' RESULTS.md || { echo "RESULTS.md missing co
 grep -q '^| math_reasoning |' RESULTS.md || { echo "RESULTS.md missing subset table rows"; o=1; }
 grep -q 'Category profile (RedHatAI speculator_benchmarks, temp 0, n=2)' hf/dflash2/README.md \
   || { echo "card missing category section"; o=1; }
-grep -q 'c919a019f84c8be86fcfc24a3e694dd2e90f4f616ac6aa103f27f5308b5f5e6c' hf/dflash2/README.md \
-  || { echo "card sha declaration changed"; o=1; }
+card_sha=$(grep -o '[0-9a-f]\{64\}' hf/dflash2/README.md | head -1)
+hub_sha=$(.venv-quant/bin/python -c "
+from huggingface_hub import HfApi
+for f in HfApi().model_info('nchapman/Qwen3.5-4B-DFlash2', files_metadata=True).siblings:
+    if f.rfilename == 'model.safetensors' and getattr(f, 'lfs', None):
+        print(f.lfs.sha256); break" 2>/dev/null)
+[ -n "$card_sha" ] && [ "$card_sha" = "$hub_sha" ] \
+  || { echo "card sha ($card_sha) != Hub model sha ($hub_sha)"; o=1; }
 grep -h '"weighted_tau": "[^"]*subsets=9' runs/bench-ep6-a.*/events.jsonl >/dev/null 2>&1 \
   || { echo "bench events missing subsets=9"; o=1; }
 n=$(grep -l '"type": "RUN_DONE".*"status": "ok"' runs/probe.*/events.jsonl 2>/dev/null | wc -l)

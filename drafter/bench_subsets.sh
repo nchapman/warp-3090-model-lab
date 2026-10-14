@@ -90,7 +90,7 @@ echo "subset,tau,accepted" >> "$RESULTS_CSV"
 # ---- per-subset: drive prompts, flush, parse the log window ----
 for f in "${SUBSET_FILES[@]:1}"; do
   s=$(basename "$f" .jsonl)
-  off=$(wc -l < "$LOG" 2>/dev/null || echo 0)
+  off=$(stat -c %s "$LOG" 2>/dev/null || echo 0)
   log_event SUBSET_START "subset=$s file=$f"
   "$VENV/python" - "$PORT" "$f" "$TEMP" "$SUBSET_N" >> "$OUT" 2>&1 << 'PY' || finish_fail "stage=prompts subset=$s"
 import concurrent.futures, json, sys, urllib.request
@@ -121,10 +121,11 @@ import csv, re, sys
 log, off, s, csv_path = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
 pat = re.compile(r"Mean acceptance length: ([0-9.]+),.*Accepted: (\d+) tokens")
 a = t = 0
-for i, line in enumerate(open(log, errors="ignore")):
-    if i < off: continue
-    m = pat.search(line)
-    if m: a += float(m.group(1)) * int(m.group(2)); t += int(m.group(2))
+with open(log, "rb") as f:
+    f.seek(off)   # byte offset: immune to CR-rich logs vs universal-newline counts
+    for raw in f:
+        m = pat.search(raw.decode(errors="ignore"))
+        if m: a += float(m.group(1)) * int(m.group(2)); t += int(m.group(2))
 tau = a / t if t else 0.0
 if t == 0:
     sys.exit(f"no acceptance lines in log window — flush missed or format drift: subset={s}")
