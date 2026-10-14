@@ -34,10 +34,11 @@ RUN_CMD="bench_subsets.sh $* (TEMP=$TEMP SPEC=$SPEC SUBSET_N=$SUBSET_N)" \
 RESULTS_CSV=${RESULTS_CSV:-$RUN_DIR/results.csv}
 OUT="$RUN_DIR/bench.out"; : > "$OUT"
 
-# the documented revision the published category profile was measured on;
-# override only when deliberately re-pinning (record the new pin in events
-# and update the published numbers)
+# the documented revision the published category profile was measured on
+# (default); overriding re-pins deliberately — recorded as DATASET_REPIN so
+# published numbers can't drift silently onto a different prompt set
 BENCH_DATASET_REV=${BENCH_DATASET_REV:-2ae86affa2cb97a972b7fc681dd51c04fbff083e}
+DOCUMENTED_PIN=2ae86affa2cb97a972b7fc681dd51c04fbff083e
 # resolve the benchmark into the standard HF cache; download AT the pinned
 # revision (BENCH_DATASET_REV pins an explicit revision; default = current
 # HEAD, recorded in events so published numbers stay attributable)
@@ -58,6 +59,9 @@ mapfile -t SUBSET_FILES < "$STAGE_OUT"
   || finish_fail "stage=dataset lines=${#SUBSET_FILES[@]} (need 10: PIN + 9 subsets)"
 PIN=${SUBSET_FILES[0]#PIN }
 NSUB=$(( ${#SUBSET_FILES[@]} - 1 ))
+if [[ $PIN != "$DOCUMENTED_PIN" ]]; then
+  log_event DATASET_REPIN "from=$DOCUMENTED_PIN" "to=$PIN"
+fi
 log_event DATASET_PIN "revision=$PIN subsets=$NSUB sub_n=$SUBSET_N"
 
 # ---- serve once ----
@@ -114,18 +118,20 @@ def hit(r):
 with concurrent.futures.ThreadPoolExecutor(8) as ex:
     print(f"n={len(rows)} nonempty={sum(ex.map(hit, rows))}")
 PY
+  nprompts=$(grep -o 'n=[0-9]*' "$OUT" | tail -1 | cut -d= -f2)
   # metric flush: log quiet for two consecutive 5s probes (max 60s);
   # byte size, same convention the byte-offset parser reads
-  _prev=-1; _quiet=0; _t0=$SECONDS
+  _prev=-1; _quiet=0; _t0=$SECONDS; _capped=1
   while (( SECONDS - _t0 < 60 )); do
     _n=$(stat -c %s "$LOG" 2>/dev/null || echo 0)
     if [[ $_n == $_prev ]]; then _quiet=$((_quiet+1)); else _quiet=0; fi
-    (( _quiet >= 2 )) && break
+    (( _quiet >= 2 )) && { _capped=0; break; }
     _prev=$_n; sleep 5
   done
-  "$VENV/python" - "$LOG" "$off" "$s" "$RESULTS_CSV" >> "$OUT" 2>&1 << 'PYTAU' || finish_fail "stage=metric subset=$s"
+  (( _capped )) && log_event WINDOW_CAPPED "subset=$s waited=60s"   # possibly truncated window
+  "$VENV/python" - "$LOG" "$off" "$s" "$RESULTS_CSV" "$nprompts" >> "$OUT" 2>&1 << 'PYTAU' || finish_fail "stage=metric subset=$s"
 import csv, re, sys
-log, off, s, csv_path = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+log, off, s, csv_path, nprompts = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5])
 pat = re.compile(r"Mean acceptance length: ([0-9.]+),.*Accepted: (\d+) tokens")
 a = t = 0
 with open(log, "rb") as f:
@@ -136,8 +142,13 @@ with open(log, "rb") as f:
 tau = a / t if t else 0.0
 if t == 0:
     sys.exit(f"no acceptance lines in log window — flush missed or format drift: subset={s}")
-if t < 100:
-    sys.exit(f"implausibly few accepted tokens ({t}) in window — partial flush: subset={s}")
+# window must be consistent with what was driven: healthy runs land ~100-200
+# accepted tokens/prompt; below n*25 = truncated window, above n*250
+# (max_tokens*n) = format drift or window bleed
+if t < nprompts * 25:
+    sys.exit(f"accepted tokens ({t}) below plausible floor for n={nprompts} — truncated window: subset={s}")
+if t > nprompts * 250:
+    sys.exit(f"accepted tokens ({t}) above theoretical ceiling for n={nprompts} — window bleed: subset={s}")
 print(f"SUBSET {s} {tau:.3f} accepted={t}")
 with open(csv_path, "a", newline="") as f:
     csv.writer(f).writerow([s, f"{tau:.3f}", t])
