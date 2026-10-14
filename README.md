@@ -156,9 +156,23 @@ per the card — non-commercial research use; see license note above). Pinned at
 commit `8e38aa4`, verify against
 `data/MANIFEST.sha256` after pulling). Good reason to freeze *on the Hub*
 rather than git alone: revision-hash citability, pull-by-pods without a repo
-clone, and a license/provenance surface git can't provide. Big artifacts (v4
-regen jsonls, champion checkpoint) go to the Hub under the same naming, never
-git.
+clone, and a license/provenance surface git can't provide.
+
+**Published models (one recipe each, no version zoo):** the champion quants
+live at the `quant_repo` ids in `models.py` (`nchapman/Qwen3.5-4B-W4A16-GPTQ`,
+`…-9B…`, `nchapman/Qwen3.8-27B-W4A16-GPTQ` — each card pins the calibration
+generation as `calib-cascade-v1`). The champion drafter (v4 armB epoch 2,
+τ 3.443 b16 / 3.131 b8) lives at
+`nchapman/warp-3090-quant-lab-drafter` (weights sha256 in the card). Earlier
+drafter generations (v3, v3.5), the v4 per-epoch snapshots, and the regen
+corpus stay local research record under `../llm-compressor/artifacts/` —
+rebuildable via this repo's pipeline, deliberately not published.
+
+**Naming rule:** local quant dirs carry a `-cascade` suffix (e.g.
+`Qwen3.5-4B-W4A16-GPTQ-cascade`) — it marks the calibration generation
+(`calib-cascade-v1`). The Hub repos use the bare ids and carry only the
+current generation; the citable version reference is the frozen-data pin, not
+a repo-name suffix.
 
 ## Layout
 
