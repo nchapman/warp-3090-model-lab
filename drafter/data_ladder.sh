@@ -44,7 +44,7 @@ used_pids=$( { fuser /dev/nvidia0 2>/dev/null || true; } | tr -s ' ')
 
 # 1) slice — nested, conv-grouped, deterministic
 if [[ ! -f "$WORK/rung_$NAME.jsonl" ]]; then
-  "$VENV/python" drafter/slice_rungs.py --jsonl "$SRC" \
+  "$VENV/bin/python" drafter/slice_rungs.py --jsonl "$SRC" \
     --tokens $(( MILL * 1000000 )) --out "$WORK/rung_$NAME.jsonl" \
     --quant "$QUANT" > "$RUN_DIR/slice.log" 2>&1 || finish_fail "stage=slice"
 fi
@@ -53,7 +53,7 @@ tail -1 "$RUN_DIR/slice.log" || true
 
 # 2) tokenize
 if [[ ! -f "$WORK/ds_$NAME/state.json" ]]; then
-  "$VENV/python" drafter/prep_dataset.py --jsonl "$WORK/rung_$NAME.jsonl" \
+  "$VENV/bin/python" drafter/prep_dataset.py --jsonl "$WORK/rung_$NAME.jsonl" \
     --out "$WORK/ds_$NAME" --quant "$QUANT" > "$RUN_DIR/prep.log" 2>&1 \
     || finish_fail "stage=prep"
 fi
@@ -61,7 +61,7 @@ fi
 # 3) draft init — v4 6-tap convention (the local draft_init_dflash2 is the
 #    4-tap v1-era init and must NOT be reused)
 if [[ ! -f "$WORK/draft_init_v4/model.safetensors" ]]; then
-  "$VENV/python" drafter/bootstrap_draft.py --model 4b --quant "$QUANT" \
+  "$VENV/bin/python" drafter/bootstrap_draft.py --model 4b --quant "$QUANT" \
     --out "$WORK/draft_init_v4" > "$RUN_DIR/bootstrap.log" 2>&1 \
     || finish_fail "stage=bootstrap"
 fi
@@ -75,7 +75,7 @@ if [[ ${LADDER_BENCH:-0} == 1 ]]; then
   while read -r bt br; do
     rm -rf "$WORK/bench_tmp"
     t0=$SECONDS
-    "$VENV/python" drafter/extract_states.py --dataset "$WORK/ds_$NAME" \
+    "$VENV/bin/python" drafter/extract_states.py --dataset "$WORK/ds_$NAME" \
       --verifier "$QUANT" --model 4b --out "$WORK/bench_tmp" --limit 300 \
       --max-batch-tokens "$bt" --max-batch-rows "$br" \
       > "$RUN_DIR/bench_${br}.log" 2>&1 || finish_fail "stage=bench cfg=$br"
@@ -96,7 +96,7 @@ fi
 nrows=$(wc -l < "$WORK/rung_$NAME.jsonl")
 nhs=$(ls "$WORK/ds_$NAME/hidden_states" 2>/dev/null | wc -l)
 if (( nhs < nrows )); then
-  "$VENV/python" drafter/extract_states.py --dataset "$WORK/ds_$NAME" \
+  "$VENV/bin/python" drafter/extract_states.py --dataset "$WORK/ds_$NAME" \
     --verifier "$QUANT" --model 4b --out "$WORK/ds_$NAME" \
     --max-batch-tokens "$BATCH_TOKENS" --max-batch-rows "$BATCH_ROWS" \
     --resume --parity 20 > "$RUN_DIR/extract.log" 2>&1 \
