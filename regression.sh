@@ -3,8 +3,11 @@
 # Catches the whole bug class (tap shapes, template drift, save gate, fp8 cast)
 # in <15 min on one GPU. Env: BASE (regen source), QUANT (verifier for
 # extract/train), OUT (workspace, wiped), PORT, VENV (drafter venv bin).
+# Standard logging via lib/runlib.sh (README "Run logging standard").
 set -eu
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+source "$ROOT/lib/runlib.sh"
+trap 'log_event RUN_FAILED "line=$LINENO"' ERR
 BASE=${BASE:-nchapman/Qwen3.5-4B-W4A16-GPTQ}
 QUANT=${QUANT:-$BASE}
 OUT=${OUT:-/tmp/regression_warp3090}
@@ -13,14 +16,16 @@ VENV=${VENV:-$ROOT/.venv-dflash/bin}
 export PATH="$VENV:$PATH"
 cd "$ROOT"
 T0=$(date +%s)
+RUN_CMD="regression.sh" run_init regression
 
 rm -rf "$OUT"; mkdir -p "$OUT"
 
 echo "[1/4] regen: serve verifier + generate 100 short conversations"
-setsid nohup "$VENV/vllm" serve "$QUANT" --port "$PORT" --max-model-len 4096 \
-  --gpu-memory-utilization 0.55 > "$OUT/regen_server.log" 2>&1 &
-for i in $(seq 1 40); do sleep 15; curl -s -m 3 "localhost:$PORT/health" >/dev/null 2>&1 && break; done
-curl -s -m 3 "localhost:$PORT/health" >/dev/null 2>&1 || { echo REGRESSION_FAIL server; exit 1; }
+launch_server "$OUT/regen_server.log" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
+  "$VENV/vllm" serve "$QUANT" --port "$PORT" --max-model-len 4096 \
+  --gpu-memory-utilization 0.55
+wait_healthy "$PORT" 600 180 || { echo REGRESSION_FAIL server; finish_fail "stage=server"; }
+log_event STAGE "n=1 regen"
 "$VENV/python" - "$PORT" "$OUT" << 'PY'
 import json, sys, urllib.request
 port, out = sys.argv[1], sys.argv[2]
@@ -40,13 +45,15 @@ with open(f"{out}/regen.jsonl", "w") as f:
         f.write(json.dumps(r) + "\n")
 print("regen:", len(rows), "rows")
 PY
-pkill -f "vllm ser[v]e"; sleep 8
+stop_server; sleep 8
+log_event STAGE_DONE "n=1 regen rows=100"
 
 echo "[2/4] build 100-row dataset (assistant-masked) + extract (6-tap fp8)"
 "$VENV/python" drafter/prep_dataset.py --jsonl "$OUT/regen.jsonl" --out "$OUT/states" \
   --quant "$QUANT" --limit 100 | tail -1
 CUDA_VISIBLE_DEVICES=0 "$VENV/python" drafter/extract_states.py --dataset "$OUT/states" \
   --verifier "$QUANT" --out "$OUT/states" --model 4b --limit 100 --parity 20 2>&1 | tail -3
+log_event STAGE_DONE "n=2 dataset+extract"
 
 echo "[3/4] draft bootstrap + 10 train steps + val"
 "$VENV/python" drafter/bootstrap_draft.py --model 4b --quant "$QUANT" --out "$OUT/draft_init"
@@ -63,6 +70,7 @@ losses = [float(m) for m in re.findall(r"loss\w*=([0-9]+\.[0-9]+)", log)]
 assert losses and max(losses) > 0.01, f"training loss suspiciously zero: {losses[:3]}"
 print(f"TRAIN_LOSS_OK max={max(losses):.3f}")
 PY
+log_event STAGE_DONE "n=3 bootstrap+train"
 
 echo "[4/4] tap-shape validator (states vs draft aux dim)"
 "$VENV/python" - "$OUT" << 'PY'
@@ -79,3 +87,4 @@ print("VALIDATOR_OK", ck[0].split('/')[-2] if ck else "")
 PY
 
 echo "REGRESSION_PASS $(( $(date +%s) - T0 ))s"
+finish_ok "elapsed=$(( $(date +%s) - T0 ))s"

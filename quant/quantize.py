@@ -196,6 +196,8 @@ def main():
                              "regime is 384)")
     parser.add_argument("--tag", default=None, help="output dir suffix")
     args = parser.parse_args()
+    from lablog import log_event
+    log_event("RUN_START", model=args.model, algo=args.algo, calib=args.calib)
 
     hub_id, info = resolve(args.model)
     base_name = hub_id.split("/")[-1]
@@ -228,6 +230,8 @@ def main():
     model.save_pretrained(save_dir, save_compressed=True)
     processor.save_pretrained(save_dir)
     print(f"saved to {save_dir}")
+    from lablog import run_done
+    run_done(save_dir=save_dir)
     if info.get("quant_repo"):
         print(f"(published reference artifact: {info['quant_repo']})")
 

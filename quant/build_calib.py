@@ -392,6 +392,8 @@ def main():
                     help="jsonl glob(s) whose conversations must not be sampled")
     ap.add_argument("--seed", type=int, default=SEED)
     args = ap.parse_args()
+    from lablog import log_event
+    log_event("RUN_START", mode=args.mode, out=args.out)
 
     if args.targets_json:
         args.targets = json.loads(args.targets_json)
@@ -445,6 +447,8 @@ def main():
                    "sources": SOURCES}, f, indent=1)
     print(f"\n{args.mode}: {len(rows)} rows -> {out}")
     print(f"sources manifest: {sidecar}")
+    from lablog import run_done
+    run_done(mode=args.mode, rows=len(rows), sidecar=str(sidecar))
     print("domains:", dict(Counter(
         "ML" if (r.get("domain") or "").startswith("belebele") else r.get("domain")
         for r in rows)))

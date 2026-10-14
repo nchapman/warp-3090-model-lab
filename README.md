@@ -182,6 +182,31 @@ local model copies. `quantize.py` outputs and eval working copies
 (`eval_*/`, `Qwen3*/`) are transient, gitignored, and disposable: upload what
 you keep, delete the rest.
 
+## Run logging standard (no more guessing)
+
+Every script and tool in this repo logs the same way — the process failures
+this project has hit (silent input mismatch, wedged servers, results in
+unexpected places) are failure modes of unmanaged runs, not of the models.
+
+- **Every run** — evals, regression, quantize, probe, calib builds — gets
+  `runs/<name>.<UTC ts>/` with `cmd.txt` (exact invocation) and
+  `events.jsonl` (structured lifecycle: `RUN_START`, `PREFLIGHT_OK/FAIL`,
+  `SERVER_LAUNCH/HEALTHY/STUCK/FAILED`, stage markers, `RUN_DONE/RUN_FAILED`).
+- **Preflight or die**: inputs are validated by name before anything launches
+  (`require_file`).
+- **Watchdogged servers**: health waits fail fast — a server whose log goes
+  idle *and* whose GPU is 0% for two consecutive probes is `SERVER_STUCK`,
+  killed by its recorded PID, with a process snapshot in the log. No
+  15-minute silent hangs. (`EXTRA_SERVE_ARGS="--enforce-eager"` dodges
+  cudagraph-capture wedges when throughput doesn't matter.)
+- **Servers die by PID** — never `pkill` scatter.
+- Inspect any run: `bash scripts/tail_run.sh [name-prefix]`.
+
+`lib/runlib.sh` is the bash implementation (sourced by `regression.sh`,
+`drafter/eval_ladder.sh`, `drafter/eval_mtp.sh`); `quant/lablog.py` is the
+python mirror (`probe.py`, `quantize.py`, `build_calib.py`). New scripts
+must source/import one of them — no exceptions.
+
 ## Layout
 
 ```

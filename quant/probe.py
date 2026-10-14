@@ -129,6 +129,8 @@ def main():
     parser.add_argument("--dump_rows", default=None, help="write per-row KL/NLL records")
     parser.add_argument("--tag", default="")
     args = parser.parse_args()
+    from lablog import log_event
+    log_event("RUN_START", model=args.model, quant=args.quant, eval_set=args.eval_set)
 
     hub_id, _ = resolve(args.model)
     base_path = args.base or hub_id
@@ -201,6 +203,9 @@ def main():
             }
         )
     )
+    from lablog import run_done
+    run_done(mean_kl=round(mean_kl, 4), weighted_mean_kl=round(weighted_mean_kl, 4),
+             p999_kl=round(p999_kl, 4), dppl_pct=round(ppl_delta, 2))
 
 
 if __name__ == "__main__":
