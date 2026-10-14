@@ -105,7 +105,7 @@ row = [name, f"spec={spec}", str(t), f"{tau:.3f}", f"20prompt temp{temp} interva
 new = True
 try:
     rows = list(csv.reader(open(csv_path)))
-    new = not any(r and r[0] == name and len(r) > 4 and f"temp{temp}" in r[4] for r in rows)
+    new = not any(r and r[0] == name and len(r) > 4 and re.search(r"temp([0-9.]+)", r[4]) and float(re.search(r"temp([0-9.]+)", r[4]).group(1)) == temp for r in rows)
 except FileNotFoundError:
     rows = []
 if new:
