@@ -34,10 +34,11 @@ if [ -n "$e_c" ] && [ -n "$e_d" ]; then
 fi
 pool() { awk -F, 'FNR>1 {a+=$2*$3; t+=$3} END {if (t) printf "%.2f", a/t}' "$1" "$2"; }
 pub=$(pool results/bench-ep6-c.csv results/bench-ep6-d.csv)
-[ -n "$pub" ] && sed 's/\*//g' RESULTS.md | grep -q "$pub" && sed 's/\*//g' hf/dflash2/README.md | grep -q "$pub" \
+pub_re=$(printf '%s' "$pub" | sed 's/\./\\./g')
+[ -n "$pub" ] && sed 's/\*//g' RESULTS.md | grep -qw "$pub" && sed 's/\*//g' hf/dflash2/README.md | grep -qw "$pub" \
   || { echo "published weighted tau ($pub) not found in RESULTS.md/card"; o=1; }
 mpub=$(pool results/bench-mtp-c.csv results/bench-mtp-d.csv)
-[ -n "$mpub" ] && sed 's/\*//g' RESULTS.md | grep -q "$mpub" \
+[ -n "$mpub" ] && sed 's/\*//g' RESULTS.md | grep -qw "$mpub" \
   || { echo "published MTP weighted tau ($mpub) not found in RESULTS.md"; o=1; }
 card_sha=$(grep -o '[0-9a-f]\{64\}' hf/dflash2/README.md | head -1)
 hub_sha=$(.venv-quant/bin/python -c "
@@ -45,8 +46,13 @@ from huggingface_hub import HfApi
 for f in HfApi().model_info('nchapman/Qwen3.5-4B-DFlash2', files_metadata=True).siblings:
     if f.rfilename == 'model.safetensors' and getattr(f, 'lfs', None):
         print(f.lfs.sha256); break" 2>/dev/null)
-[ -n "$card_sha" ] && [ "$card_sha" = "$hub_sha" ] \
-  || { echo "card sha ($card_sha) != Hub model sha ($hub_sha)"; o=1; }
+if [ -z "$hub_sha" ]; then
+  echo "Hub sha lookup failed (network/tooling) — cannot verify card sha"
+  o=1
+elif [ -n "$card_sha" ] && [ "$card_sha" != "$hub_sha" ]; then
+  echo "card sha ($card_sha) != Hub model sha ($hub_sha) — integrity mismatch"
+  o=1
+fi
 grep -h '"weighted_tau": "[^"]*subsets=9' runs/bench-ep6-a.*/events.jsonl >/dev/null 2>&1 \
   || { echo "bench events missing subsets=9"; o=1; }
 n=$(grep -l '"type": "RUN_DONE".*"status": "ok"' runs/probe.*/events.jsonl 2>/dev/null | wc -l)
