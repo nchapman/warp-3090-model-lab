@@ -133,6 +133,8 @@ with open(log, "rb") as f:
 tau = a / t if t else 0.0
 if t == 0:
     sys.exit(f"no acceptance lines in log window — flush missed or format drift: subset={s}")
+if t < 100:
+    sys.exit(f"implausibly few accepted tokens ({t}) in window — partial flush: subset={s}")
 print(f"SUBSET {s} {tau:.3f} accepted={t}")
 with open(csv_path, "a", newline="") as f:
     csv.writer(f).writerow([s, f"{tau:.3f}", t])

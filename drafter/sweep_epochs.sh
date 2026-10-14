@@ -27,6 +27,7 @@ PARENT=$1; NAME=$2; SPEC=${3:-15}; PORT=${4:-8200}
 TEMP=${TEMP:-0.7}
 SWEEP_TOPK=${SWEEP_TOPK:-2}
 SWEEP_REPEATS=${SWEEP_REPEATS:-3}
+(( SWEEP_REPEATS >= 1 )) || { echo "SWEEP_REPEATS>=1 required — 0 would allow single-draw winners" >&2; exit 1; }
 VERIFIER_PATH=${VERIFIER_PATH:-nchapman/Qwen3.5-4B-W4A16-GPTQ}
 VENV=${VENV:-$ROOT/.venv-dflash/bin}
 

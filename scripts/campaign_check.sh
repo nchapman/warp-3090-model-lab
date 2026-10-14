@@ -17,7 +17,9 @@ git ls-files --error-unmatch drafter/bench_subsets.sh >/dev/null 2>&1 \
 calc() { awk -F, 'NR>1 {a+=$2*$3; t+=$3} END {if (t) printf "%.2f", a/t}' "$1"; }
 m_c=$(calc results/bench-mtp-c.csv 2>/dev/null); m_d=$(calc results/bench-mtp-d.csv 2>/dev/null)
 e_c=$(calc results/bench-ep6-c.csv 2>/dev/null); e_d=$(calc results/bench-ep6-d.csv 2>/dev/null)
-[ -s "results/bench-ep6-c.csv" ] && [ -s "results/bench-mtp-c.csv" ] || { echo "clean-run CSVs missing from results/"; o=1; }
+for f in results/bench-mtp-c.csv results/bench-mtp-d.csv results/bench-ep6-c.csv results/bench-ep6-d.csv; do
+  [ -s "$f" ] || { echo "clean-run CSV missing/empty: $f"; o=1; }
+done
 if [ -n "$m_c" ] && [ -n "$m_d" ]; then
   ok=$(awk -v a="$m_c" -v b="$m_d" 'BEGIN {print (a-b<0.05 && b-a<0.05) ? 1 : 0}')
   [ "$ok" = 1 ] || { echo "mtp draws disagree: $m_c vs $m_d"; o=1; }
