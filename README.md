@@ -103,10 +103,12 @@ Same sequence with `--preset v4` (100k convs → 260M tokens; fp8 6-tap states
 `drafter/train.md` at checkpoint-freq 1. Expect τ ≈ 3.8 at the serving point
 (temp 0.7) vs native MTP ≈ 2.9 — measure the MTP baseline on your own ladder
 first (`drafter/train.md`); published MTP numbers are harness-specific.
-Checkpoint selection: **rank at the serving temperature** (`TEMP=0.7`, n≥4
-per contender) — τ rises monotonically to end-of-training at 0.7, but the
-ranking is temperature-dependent (greedy peaks mid-run); never rank on
-single draws (see the measurement protocol in `AGENTS.md`).
+Checkpoint selection: `bash drafter/sweep_epochs.sh <checkpoints_parent>
+<sweep_name>` — runs the serving-temp ladder (`TEMP=0.7`) across every epoch
+and extra repeats on the top contenders, emitting a ranked table with
+pooled n. τ rises monotonically to end-of-training at 0.7, but the ranking
+is temperature-dependent (greedy peaks mid-run); never rank on single draws
+(see the measurement protocol in `AGENTS.md`).
 
 ## Data (frozen, in git under `data/`)
 

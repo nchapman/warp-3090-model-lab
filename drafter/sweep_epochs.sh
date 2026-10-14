@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# sweep_epochs.sh — checkpoint-selection sweep for DFlash2 drafters.
+#
+# Runs the serving-temperature ladder across every per-epoch checkpoint dir,
+# then extra repeats on the top contenders, and emits a ranked table with
+# pooled n. One command = the full selection campaign from AGENTS.md.
+#
+#   bash drafter/sweep_epochs.sh <checkpoints_parent> <sweep_name> [spec] [port]
+#
+# Env:
+#   TEMP          sampling temperature (default 0.7 — the selection regime)
+#   SWEEP_TOPK    contenders promoted to round 2 (default 2)
+#   SWEEP_REPEATS extra runs per promoted contender (default 3 -> n=4 pooled)
+#   VERIFIER_PATH verifier model id/path (default: the 4B W4A16 quant)
+#   EXTRA_SERVE_ARGS passed through to eval_ladder.sh
+#
+# Artifacts: runs/sweep-<name>.<ts>.<pid>/ with events.jsonl, results.csv
+# (all ladder rows), and summary.md (the ranked table). Each epoch eval is a
+# child ladder-* run dir, recorded in SWEEP_EPOCH events.
+#
+# Runtime: ~6.5 min per eval on GB10 — 6 epochs + 2x3 repeats ≈ 80 min.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$ROOT/lib/runlib.sh"
+
+PARENT=$1; NAME=$2; SPEC=${3:-15}; PORT=${4:-8200}
+TEMP=${TEMP:-0.7}
+SWEEP_TOPK=${SWEEP_TOPK:-2}
+SWEEP_REPEATS=${SWEEP_REPEATS:-3}
+VERIFIER_PATH=${VERIFIER_PATH:-nchapman/Qwen3.5-4B-W4A16-GPTQ}
+
+RUN_CMD="sweep_epochs.sh $* (TEMP=$TEMP TOPK=$SWEEP_TOPK REPEATS=$SWEEP_REPEATS verifier=$VERIFIER_PATH)" \
+  run_init "sweep-$NAME"
+
+[[ -d "$PARENT" ]] || { echo "not a dir: $PARENT" >&2; exit 1; }
+epochs=()
+for d in "$PARENT"/*/; do
+  d=${d%/}
+  [[ -f "$d/model.safetensors" ]] && epochs+=("$d")
+done
+(( ${#epochs[@]} >= 2 )) || { log_event SWEEP_FAILED "reason=need>=2 checkpoint dirs with model.safetensors"; finish_fail "reason=no-epochs"; }
+log_event SWEEP_START "epochs=${#epochs[@]} temp=$TEMP"
+
+# results.csv lives in the sweep run dir — self-contained, no /tmp litter
+RESULTS_CSV="$RUN_DIR/results.csv"
+
+tau_of() { grep "^$1," "$RESULTS_CSV" | tail -1 | awk -F, '{print $4}'; }
+mean_of() { grep "^$1," "$RESULTS_CSV" | awk -F, '{s+=$4; n++} END {printf "%.3f %d", s/n, n}'; }
+
+run_epoch() {  # run_epoch <dir> <label>
+  VERIFIER_PATH="$VERIFIER_PATH" RESULTS_CSV="$RESULTS_CSV" TEMP="$TEMP" \
+    bash "$ROOT/drafter/eval_ladder.sh" "$1" "$2" "$SPEC" "$PORT" >/dev/null 2>&1
+  local t; t=$(tau_of "$2")
+  log_event SWEEP_EPOCH "label=$2 tau=$t dir=$1"
+  echo "  $2: τ=$t"
+}
+
+echo "== round 1: one ladder per epoch (temp $TEMP) =="
+for d in "${epochs[@]}"; do run_epoch "$d" "$NAME-$(basename "$d")"; done
+
+echo "== round 2: $SWEEP_REPEATS extra runs on top $SWEEP_TOPK =="
+mapfile -t top < <(awk -F, -v p="$NAME-" '$1 ~ "^"p {print $4, $1}' "$RESULTS_CSV" \
+                  | sort -rn | head -"$SWEEP_TOPK" | awk '{print $2}')
+for label in "${top[@]}"; do
+  d=""
+  for e in "${epochs[@]}"; do [[ "$NAME-$(basename "$e")" == "$label" ]] && d=$e; done
+  [[ -n "$d" ]] || continue
+  for ((r=1; r<=SWEEP_REPEATS; r++)); do run_epoch "$d" "${label}r$r"; done
+  # rename repeat rows so pooled stats key on the base label
+  sed -i "s/^${label}r[0-9]*,/${label},/" "$RESULTS_CSV"
+done
+
+echo "== ranked (pooled means, temp $TEMP) =="
+{
+  echo "## Checkpoint sweep — $NAME (temp $TEMP, ladder-20 interval-weighted τ)"
+  echo
+  echo "| rank | checkpoint | τ mean | n |"
+  echo "|---|---|---|---|"
+  awk -F, -v p="$NAME-" '$1 ~ "^"p {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%s %.3f %d\n", k, s[k]/n[k], n[k]}' \
+    "$RESULTS_CSV" | sort -k2 -rn | awk '{printf "| %d | %s | **%s** | %s |\n", NR, $1, $2, $3}'
+} | tee "$RUN_DIR/summary.md"
+
+winner=$(awk -F, -v p="$NAME-" '$1 ~ "^"p {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%.4f %s\n", s[k]/n[k], k}' \
+  "$RESULTS_CSV" | sort -rn | head -1 | awk '{print $2}')
+finish_ok "winner=$winner epochs=${#epochs[@]} temp=$TEMP"

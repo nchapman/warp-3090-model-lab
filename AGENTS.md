@@ -21,7 +21,9 @@ learned the hard way.
 ## Measuring τ (acceptance)
 
 - `TEMP` env on `drafter/eval_ladder.sh` / `eval_mtp.sh` selects sampling
-  temperature (default 1.0). Three regimes, three purposes:
+  temperature (default 1.0). For checkpoint selection, use
+  `drafter/sweep_epochs.sh` — one command, full campaign. Three regimes,
+  three purposes:
   - **t=0 (greedy)** — the low-noise instrument (repeat spread ~0.05). Use to
     sanity-check stability, not to pick shipping checkpoints.
   - **t=0.7 (serving)** — the deployment point and the corpus generation
