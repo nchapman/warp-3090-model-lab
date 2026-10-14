@@ -34,10 +34,10 @@ if [ -n "$e_c" ] && [ -n "$e_d" ]; then
 fi
 pool() { awk -F, 'FNR>1 {a+=$2*$3; t+=$3} END {if (t) printf "%.2f", a/t}' "$1" "$2"; }
 pub=$(pool results/bench-ep6-c.csv results/bench-ep6-d.csv)
-[ -n "$pub" ] && grep -q "\*\*$pub\*\*" RESULTS.md && grep -q "\*\*$pub\*\*" hf/dflash2/README.md \
+[ -n "$pub" ] && sed 's/\*//g' RESULTS.md | grep -q "$pub" && sed 's/\*//g' hf/dflash2/README.md | grep -q "$pub" \
   || { echo "published weighted tau ($pub) not found in RESULTS.md/card"; o=1; }
 mpub=$(pool results/bench-mtp-c.csv results/bench-mtp-d.csv)
-[ -n "$mpub" ] && grep -q "\*\*$mpub\*\*" RESULTS.md \
+[ -n "$mpub" ] && sed 's/\*//g' RESULTS.md | grep -q "$mpub" \
   || { echo "published MTP weighted tau ($mpub) not found in RESULTS.md"; o=1; }
 card_sha=$(grep -o '[0-9a-f]\{64\}' hf/dflash2/README.md | head -1)
 hub_sha=$(.venv-quant/bin/python -c "

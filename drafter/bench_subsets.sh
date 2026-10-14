@@ -40,8 +40,7 @@ OUT="$RUN_DIR/bench.out"; : > "$OUT"
 BENCH_DATASET_REV=${BENCH_DATASET_REV:-2ae86affa2cb97a972b7fc681dd51c04fbff083e}
 DOCUMENTED_PIN=2ae86affa2cb97a972b7fc681dd51c04fbff083e
 # resolve the benchmark into the standard HF cache; download AT the pinned
-# revision (BENCH_DATASET_REV pins an explicit revision; default = current
-# HEAD, recorded in events so published numbers stay attributable)
+# revision (default: the documented pin above)
 STAGE_OUT="$RUN_DIR/staging.txt"
 "$VENV/python" - "${BENCH_DATASET_REV:-}" > "$STAGE_OUT" << 'PY' || finish_fail "stage=dataset"
 import sys
@@ -76,7 +75,7 @@ else
   EVAL_DIR="$RUN_DIR/serve"; mkdir -p "$EVAL_DIR"
   cp "$DRAFTER"/config.json "$DRAFTER"/model.safetensors "$EVAL_DIR"/
   cp "$DRAFTER"/config.py "$EVAL_DIR"/ 2>/dev/null || true
-  "$VENV/python" - "$EVAL_DIR/config.json" "$SPEC" "$VERIFIER_PATH" << 'PYCFG'
+  "$VENV/python" - "$EVAL_DIR/config.json" "$SPEC" "$VERIFIER_PATH" << 'PYCFG' || finish_fail "stage=config-edit"
 import json, sys
 p, spec, verifier = sys.argv[1], sys.argv[2], sys.argv[3]
 c = json.load(open(p))
