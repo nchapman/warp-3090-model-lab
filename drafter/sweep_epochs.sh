@@ -104,5 +104,5 @@ echo "== ranked (pooled means, temp $TEMP) =="
 
 winner=$(awk -F, -v p="$NAME-" -v minn=$((1 + SWEEP_REPEATS)) 'index($1, p)==1 {s[$1]+=$4; n[$1]++} END {for (k in s) if (n[k] >= minn) printf "%.4f %s\n", s[k]/n[k], k}' \
   "$RESULTS_CSV" | sort -rn | head -1 | awk '{print $2}')
-[[ -z "$winner" ]] && finish_fail "reason=no-label-with-n>=${1}+$SWEEP_REPEATS (lucky single draws are not a selection) failed=$SWEEP_FAILED"
+[[ -z "$winner" ]] && finish_fail "reason=no-label-with-n>=$((1 + SWEEP_REPEATS)) (lucky single draws are not a selection) failed=$SWEEP_FAILED"
 finish_ok "winner=$winner epochs=${#epochs[@]} temp=$TEMP failed=${SWEEP_FAILED:-0}"

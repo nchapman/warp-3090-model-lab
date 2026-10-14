@@ -117,7 +117,7 @@ Wins every subset. Numbers above are from the second measurement pass
 (fixed log-window offsets — the first pass's CR-rich-log windowing bled
 neighboring subsets' tail lines; conclusions identical, shifts within
 run noise). Weak tail = translation
-(+0.11), consistent with the chat-heavy cascade corpus; strongest = math,
+(+0.08), consistent with the chat-heavy cascade corpus; strongest = math,
 code, rag.
 
 ## Pipeline reproducibility confirmation (2026-10-14)

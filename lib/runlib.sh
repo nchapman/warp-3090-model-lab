@@ -69,6 +69,7 @@ launch_server() {
   local args=("$@") ptc=""
   for ((i=0; i<${#args[@]}; i++)); do
     if [[ ${args[i]} == "--port" ]]; then ptc=${args[i+1]:-}; break; fi
+    if [[ ${args[i]} == --port=* ]]; then ptc=${args[i]#--port=}; break; fi
   done
   if [[ -n $ptc ]] && curl -s -m 2 "localhost:$ptc/health" >/dev/null 2>&1; then
     log_event SERVER_PORT_BUSY "port=$ptc"
@@ -77,6 +78,10 @@ launch_server() {
   fi
   nohup "$@" > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
+  # a killed/interrupted script must not leak the nohup'd server; the
+  # guard flag keeps normal explicit stop_server from double-firing
+  SERVER_STOPPED=0
+  trap '[[ ${SERVER_PID:-} && $SERVER_STOPPED == 0 ]] && stop_server' EXIT INT TERM
   log_event SERVER_LAUNCH "pid=$SERVER_PID" "log=$SERVER_LOG"
 }
 
@@ -130,6 +135,7 @@ server_snapshot() {
 # stop_server — TERM, up to 20s grace, then KILL; children too. By PID only.
 stop_server() {
   [[ -n ${SERVER_PID:-} ]] || return 0
+  SERVER_STOPPED=1   # suppress the EXIT-trap cleanup double-fire
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
     SERVER_PID=""; return 0   # already gone — idempotent
   fi

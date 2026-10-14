@@ -34,13 +34,16 @@ RUN_CMD="bench_subsets.sh $* (TEMP=$TEMP SPEC=$SPEC SUBSET_N=$SUBSET_N)" \
 RESULTS_CSV=${RESULTS_CSV:-$RUN_DIR/results.csv}
 OUT="$RUN_DIR/bench.out"; : > "$OUT"
 
+BENCH_DATASET_REV=${BENCH_DATASET_REV:-}
 # resolve the benchmark into the standard HF cache; download AT the pinned
-# revision (the pin must constrain the bytes, not just be logged)
+# revision (BENCH_DATASET_REV pins an explicit revision; default = current
+# HEAD, recorded in events so published numbers stay attributable)
 STAGE_OUT="$RUN_DIR/staging.txt"
-"$VENV/python" - > "$STAGE_OUT" << 'PY' || finish_fail "stage=dataset"
+"$VENV/python" - "${BENCH_DATASET_REV:-}" > "$STAGE_OUT" << 'PY' || finish_fail "stage=dataset"
 import sys
 from huggingface_hub import hf_hub_download, HfApi
-sha = HfApi().dataset_info("RedHatAI/speculator_benchmarks").sha
+rev = sys.argv[1] or None
+sha = HfApi().dataset_info("RedHatAI/speculator_benchmarks", revision=rev).sha
 print(f"PIN {sha}")
 for s in ["qa","HumanEval","math_reasoning","tool_call","rag","question",
           "writing","summarization","translation"]:
@@ -108,10 +111,11 @@ def hit(r):
 with concurrent.futures.ThreadPoolExecutor(8) as ex:
     print(f"n={len(rows)} nonempty={sum(ex.map(hit, rows))}")
 PY
-  # metric flush: log quiet for two consecutive 5s probes (max 60s)
+  # metric flush: log quiet for two consecutive 5s probes (max 60s);
+  # byte size, same convention the byte-offset parser reads
   _prev=-1; _quiet=0; _t0=$SECONDS
   while (( SECONDS - _t0 < 60 )); do
-    _n=$(wc -l < "$LOG" 2>/dev/null || echo 0)
+    _n=$(stat -c %s "$LOG" 2>/dev/null || echo 0)
     if [[ $_n == $_prev ]]; then _quiet=$((_quiet+1)); else _quiet=0; fi
     (( _quiet >= 2 )) && break
     _prev=$_n; sleep 5
