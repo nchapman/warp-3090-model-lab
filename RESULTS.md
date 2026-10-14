@@ -94,4 +94,34 @@ Conclusions:
 - The shipped `nchapman/Qwen3.5-4B-DFlash2` beats native MTP by ~+1 tau at
   every temperature.
 
+## Confirmed category profile (2026-10-14, RedHatAI speculator_benchmarks, GB10)
+
+`drafter/bench_subsets.sh` (dataset pin 2ae86af, temp 0, n=2 draws per
+config, 924 prompts, interval-weighted τ from vLLM acceptance logs):
+
+| subset | MTP k=3 | DFlash2 (shipped) | Δ |
+|---|---|---|---|
+| qa | 2.95 | **3.61** | +0.66 |
+| HumanEval | 3.32 | **4.81** | +1.49 |
+| math_reasoning | 3.49 | **6.32** | +2.84 |
+| tool_call | 3.23 | **4.84** | +1.60 |
+| rag | 3.35 | **4.98** | +1.63 |
+| question | 3.13 | **4.51** | +1.38 |
+| writing | 3.08 | **4.37** | +1.29 |
+| summarization | 3.11 | **4.28** | +1.17 |
+| translation | 2.97 | **3.08** | +0.11 |
+| **weighted** | **3.21** | **4.67** | **+1.46** |
+
+Wins every subset; repeat spreads ≤0.15 per subset. Weak tail = translation
+(+0.11), consistent with the chat-heavy cascade corpus; strongest = math,
+code, rag.
+
+## Pipeline reproducibility confirmation (2026-10-14)
+
+`quant/probe.py` re-runs against the published Hub quants on frozen
+`probe-v4` reproduce the published weightedKL **exactly**: 4b 0.1087, 9b
+0.0889 (dppl 3.35% / 3.23%). The 27b probe OOMs on GB10 (bf16 base + quant
+will not co-reside in 128GB) — its 0.1264 stands as measured at build time;
+re-confirm on a pod when convenient.
+
 Full narrative: `docs/history/dflash2_research.md`, `docs/history/calib_v2_plan.md`.
