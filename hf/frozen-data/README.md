@@ -29,7 +29,8 @@ defined on these exact rows —
 - **probe-v4.jsonl** (378 rows) — the fidelity ruler; the weightedKL metric
 - **probe-guard.jsonl** (76 rows) — OOD guard (no_robots + Belebele, 9 languages)
 - **ladder-20.jsonl** (20 prompts) — the acceptance ladder; the τ metric
-  (champion τ 3.443 b16, native MTP 2.71 re-anchored on it)
+  (shipped drafter τ 3.79 at the serving point / native MTP 2.86, measured on
+  it)
 - **conv-ids/** — conversation-id manifests of the v3/v4/v5 drafter training
   slices (deterministic outputs of the repo's slice_convs.py presets)
 
