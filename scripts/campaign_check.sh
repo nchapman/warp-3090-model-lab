@@ -9,7 +9,11 @@ for b in mtp-a mtp-b ep6-a ep6-b; do
     || { echo "missing: bench $b"; o=1; }
 done
 git diff --quiet && git diff --cached --quiet || { echo "dirty tree"; o=1; }
-[ -z "$(git log origin/main..HEAD --oneline)" ] || { echo "unpushed commits"; o=1; }
+if ! git log origin/main..HEAD --oneline >/dev/null 2>&1; then
+  echo "git failure (no origin/main?)"; o=1
+elif [ -n "$(git log origin/main..HEAD --oneline)" ]; then
+  echo "unpushed commits"; o=1
+fi
 git ls-files --error-unmatch drafter/bench_subsets.sh >/dev/null 2>&1 \
   || { echo "bench_subsets.sh not committed"; o=1; }
 # data-based assertions: weighted tau from the clean runs must agree across

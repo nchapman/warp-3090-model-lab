@@ -34,7 +34,10 @@ RUN_CMD="bench_subsets.sh $* (TEMP=$TEMP SPEC=$SPEC SUBSET_N=$SUBSET_N)" \
 RESULTS_CSV=${RESULTS_CSV:-$RUN_DIR/results.csv}
 OUT="$RUN_DIR/bench.out"; : > "$OUT"
 
-BENCH_DATASET_REV=${BENCH_DATASET_REV:-}
+# the documented revision the published category profile was measured on;
+# override only when deliberately re-pinning (record the new pin in events
+# and update the published numbers)
+BENCH_DATASET_REV=${BENCH_DATASET_REV:-2ae86affa2cb97a972b7fc681dd51c04fbff083e}
 # resolve the benchmark into the standard HF cache; download AT the pinned
 # revision (BENCH_DATASET_REV pins an explicit revision; default = current
 # HEAD, recorded in events so published numbers stay attributable)
