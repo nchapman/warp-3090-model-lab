@@ -39,7 +39,7 @@ free_gb=$(df -BG --output=avail . | tail -1 | tr -dc '0-9')
 
 # GPU must be free — GB10's nvidia-smi reports [N/A] for memory, so check
 # for processes holding the device instead
-used_pids=$(fuser /dev/nvidia0 2>/dev/null | tr -s ' ')
+used_pids=$( { fuser /dev/nvidia0 2>/dev/null || true; } | tr -s ' ')
 [[ -z $used_pids ]] || finish_fail "gpu busy: pids=$used_pids hold /dev/nvidia0"
 
 # 1) slice — nested, conv-grouped, deterministic
