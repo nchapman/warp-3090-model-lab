@@ -101,6 +101,8 @@ for line in open(log, errors="ignore"):
         acc, tok = float(m.group(1)), int(m.group(2))
         a += acc * tok; t += tok
 tau = a / t if t else 0.0
+if t == 0:
+    sys.exit(f"no acceptance lines in server log — flush missed or format drift: name={name}")
 print(f"TAU {name} {tau:.3f} accepted={t}")
 row = [name, f"spec={spec}", str(t), f"{tau:.3f}", f"20prompt temp{temp} interval-weighted"]
 new = True

@@ -28,6 +28,7 @@ TEMP=${TEMP:-0.7}
 SWEEP_TOPK=${SWEEP_TOPK:-2}
 SWEEP_REPEATS=${SWEEP_REPEATS:-3}
 VERIFIER_PATH=${VERIFIER_PATH:-nchapman/Qwen3.5-4B-W4A16-GPTQ}
+VENV=${VENV:-$ROOT/.venv-dflash/bin}
 
 RUN_CMD="sweep_epochs.sh $* (TEMP=$TEMP TOPK=$SWEEP_TOPK REPEATS=$SWEEP_REPEATS verifier=$VERIFIER_PATH)" \
   run_init "sweep-$NAME"
@@ -74,8 +75,8 @@ for label in "${top[@]}"; do
   for ((r=1; r<=SWEEP_REPEATS; r++)); do run_epoch "$d" "${label}r$r"; done
   # rename repeat rows so pooled stats key on the base label (exact string
   # match, no regex interpolation of the label)
-  "$ROOT/.venv-dflash/bin/python" - "$RESULTS_CSV" "$label" << 'PYREN'
-import sys
+  "$VENV/python" - "$RESULTS_CSV" "$label" << 'PYREN'
+import os, sys
 csv_path, label = sys.argv[1], sys.argv[2]
 lines = open(csv_path).readlines()
 out = []
@@ -84,7 +85,10 @@ for l in lines:
     if head.startswith(label + "r") and head[len(label)+1:].isdigit():
         l = label + "," + l.split(",", 1)[1]
     out.append(l)
-open(csv_path, "w").writelines(out)
+tmp = csv_path + ".tmp"
+with open(tmp, "w") as f:
+    f.writelines(out)
+os.replace(tmp, csv_path)   # atomic — never truncate the campaign's only CSV
 PYREN
 done
 
@@ -98,7 +102,7 @@ echo "== ranked (pooled means, temp $TEMP) =="
     "$RESULTS_CSV" | sort -k2 -rn | awk '{printf "| %d | %s | **%s** | %s |\n", NR, $1, $2, $3}'
 } | tee "$RUN_DIR/summary.md"
 
-winner=$(awk -F, -v p="$NAME-" 'index($1, p)==1 {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%.4f %s\n", s[k]/n[k], k}' \
+winner=$(awk -F, -v p="$NAME-" -v minn=$((1 + SWEEP_REPEATS)) 'index($1, p)==1 {s[$1]+=$4; n[$1]++} END {for (k in s) if (n[k] >= minn) printf "%.4f %s\n", s[k]/n[k], k}' \
   "$RESULTS_CSV" | sort -rn | head -1 | awk '{print $2}')
-[[ -z "$winner" ]] && finish_fail "reason=no-successful-epochs failed=$SWEEP_FAILED"
+[[ -z "$winner" ]] && finish_fail "reason=no-label-with-n>=${1}+$SWEEP_REPEATS (lucky single draws are not a selection) failed=$SWEEP_FAILED"
 finish_ok "winner=$winner epochs=${#epochs[@]} temp=$TEMP failed=${SWEEP_FAILED:-0}"

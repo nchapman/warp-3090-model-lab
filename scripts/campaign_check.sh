@@ -12,10 +12,27 @@ git diff --quiet && git diff --cached --quiet || { echo "dirty tree"; o=1; }
 [ -z "$(git log origin/main..HEAD --oneline)" ] || { echo "unpushed commits"; o=1; }
 git ls-files --error-unmatch drafter/bench_subsets.sh >/dev/null 2>&1 \
   || { echo "bench_subsets.sh not committed"; o=1; }
-grep -q 'Confirmed category profile' RESULTS.md || { echo "RESULTS.md missing confirmed profile section"; o=1; }
-grep -q '^| math_reasoning |' RESULTS.md || { echo "RESULTS.md missing subset table rows"; o=1; }
-grep -q 'Category profile (RedHatAI speculator_benchmarks, temp 0, n=2)' hf/dflash2/README.md \
-  || { echo "card missing category section"; o=1; }
+# data-based assertions: weighted tau from the clean runs must agree across
+# draws and match the numbers published in RESULTS.md and the card
+calc() { awk -F, 'NR>1 {a+=$2*$3; t+=$3} END {if (t) printf "%.2f", a/t}' "$1"; }
+m_c=$(calc /tmp/bench-mtp-c.csv 2>/dev/null); m_d=$(calc /tmp/bench-mtp-d.csv 2>/dev/null)
+e_c=$(calc /tmp/bench-ep6-c.csv 2>/dev/null); e_d=$(calc /tmp/bench-ep6-d.csv 2>/dev/null)
+[ -n "$m_c" ] && [ -n "$e_c" ] || { echo "clean-run CSVs missing from /tmp"; o=1; }
+if [ -n "$m_c" ] && [ -n "$m_d" ]; then
+  ok=$(awk -v a="$m_c" -v b="$m_d" 'BEGIN {print (a-b<0.05 && b-a<0.05) ? 1 : 0}')
+  [ "$ok" = 1 ] || { echo "mtp draws disagree: $m_c vs $m_d"; o=1; }
+fi
+if [ -n "$e_c" ] && [ -n "$e_d" ]; then
+  ok=$(awk -v a="$e_c" -v b="$e_d" 'BEGIN {print (a-b<0.05 && b-a<0.05) ? 1 : 0}')
+  [ "$ok" = 1 ] || { echo "ep6 draws disagree: $e_c vs $e_d"; o=1; }
+fi
+pool() { awk -F, 'FNR>1 {a+=$2*$3; t+=$3} END {if (t) printf "%.2f", a/t}' "$1" "$2"; }
+pub=$(pool /tmp/bench-ep6-c.csv /tmp/bench-ep6-d.csv)
+[ -n "$pub" ] && grep -q "\*\*$pub\*\*" RESULTS.md && grep -q "\*\*$pub\*\*" hf/dflash2/README.md \
+  || { echo "published weighted tau ($pub) not found in RESULTS.md/card"; o=1; }
+mpub=$(pool /tmp/bench-mtp-c.csv /tmp/bench-mtp-d.csv)
+[ -n "$mpub" ] && grep -q "\*\*$mpub\*\*" RESULTS.md \
+  || { echo "published MTP weighted tau ($mpub) not found in RESULTS.md"; o=1; }
 card_sha=$(grep -o '[0-9a-f]\{64\}' hf/dflash2/README.md | head -1)
 hub_sha=$(.venv-quant/bin/python -c "
 from huggingface_hub import HfApi
