@@ -58,9 +58,10 @@ launch_server "$LOG" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
 wait_healthy "$PORT" || finish_fail "stage=health"
 
 # DFlash2 convention: temp 1.0 / top_p 0.95 / top_k 20, max 250 tok, conc 8.
-# TEMP=0 (greedy) is the variance-reduced SELECTION instrument: temp-1.0 τ is
-# heavy-tailed (observed 0.34 spread on identical inputs) and cannot rank
-# 0.1-τ differences at small n; greedy ranks checkpoints ~noise-free.
+# TEMP selects the regime: 0.7 = serving point (checkpoint SELECTION happens
+# here — see AGENTS.md); 0 = greedy, the low-variance stability instrument
+# (repeat spread ~0.05); 1.0 = heavy-tailed (0.34 spread on identical inputs)
+# — never rank checkpoints on small n at t>=0.7 without repeats.
 TEMP=${TEMP:-1.0}
 log_event PROMPTS_START "n=20 temp=$TEMP"
 "$VENV/python" - "$PORT" "$LADDER" "$TEMP" << 'PY' >> "$OUT" 2>&1
@@ -104,7 +105,7 @@ row = [name, f"spec={spec}", str(t), f"{tau:.3f}", f"20prompt temp{temp} interva
 new = True
 try:
     rows = list(csv.reader(open(csv_path)))
-    new = not any(r and r[0] == name for r in rows)
+    new = not any(r and r[0] == name and len(r) > 4 and f"temp{temp}" in r[4] for r in rows)
 except FileNotFoundError:
     rows = []
 if new:

@@ -48,8 +48,14 @@ tau_of() { grep "^$1," "$RESULTS_CSV" | tail -1 | awk -F, '{print $4}'; }
 mean_of() { grep "^$1," "$RESULTS_CSV" | awk -F, '{s+=$4; n++} END {printf "%.3f %d", s/n, n}'; }
 
 run_epoch() {  # run_epoch <dir> <label>
-  VERIFIER_PATH="$VERIFIER_PATH" RESULTS_CSV="$RESULTS_CSV" TEMP="$TEMP" \
-    bash "$ROOT/drafter/eval_ladder.sh" "$1" "$2" "$SPEC" "$PORT" >/dev/null 2>&1
+  local child="$RUN_DIR/child-${label}.log"
+  if ! VERIFIER_PATH="$VERIFIER_PATH" RESULTS_CSV="$RESULTS_CSV" TEMP="$TEMP" \
+      bash "$ROOT/drafter/eval_ladder.sh" "$1" "$2" "$SPEC" "$PORT" >"$child" 2>&1; then
+    log_event SWEEP_EPOCH_FAILED "label=$2 dir=$1 child_log=$child"
+    echo "  $2: FAILED (see $child)"
+    SWEEP_FAILED=$(( ${SWEEP_FAILED:-0} + 1 ))
+    return 0
+  fi
   local t; t=$(tau_of "$2")
   log_event SWEEP_EPOCH "label=$2 tau=$t dir=$1"
   echo "  $2: τ=$t"
@@ -82,4 +88,5 @@ echo "== ranked (pooled means, temp $TEMP) =="
 
 winner=$(awk -F, -v p="$NAME-" '$1 ~ "^"p {s[$1]+=$4; n[$1]++} END {for (k in s) printf "%.4f %s\n", s[k]/n[k], k}' \
   "$RESULTS_CSV" | sort -rn | head -1 | awk '{print $2}')
-finish_ok "winner=$winner epochs=${#epochs[@]} temp=$TEMP"
+[[ -z "$winner" ]] && finish_fail "reason=no-successful-epochs failed=$SWEEP_FAILED"
+finish_ok "winner=$winner epochs=${#epochs[@]} temp=$TEMP failed=${SWEEP_FAILED:-0}"

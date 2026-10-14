@@ -34,21 +34,25 @@ RUN_CMD="bench_subsets.sh $* (TEMP=$TEMP SPEC=$SPEC SUBSET_N=$SUBSET_N)" \
 RESULTS_CSV=${RESULTS_CSV:-$RUN_DIR/results.csv}
 OUT="$RUN_DIR/bench.out"; : > "$OUT"
 
-# resolve the benchmark into the standard HF cache; pin the revision
-mapfile -t SUBSET_FILES < <("$VENV/python" - "$SUBSET_N" << 'PY'
+# resolve the benchmark into the standard HF cache; download AT the pinned
+# revision (the pin must constrain the bytes, not just be logged)
+STAGE_OUT="$RUN_DIR/staging.txt"
+"$VENV/python" - > "$STAGE_OUT" << 'PY' || finish_fail "stage=dataset"
 import sys
 from huggingface_hub import hf_hub_download, HfApi
-cap = int(sys.argv[1])
 sha = HfApi().dataset_info("RedHatAI/speculator_benchmarks").sha
 print(f"PIN {sha}")
 for s in ["qa","HumanEval","math_reasoning","tool_call","rag","question",
           "writing","summarization","translation"]:
     print(hf_hub_download("RedHatAI/speculator_benchmarks", f"{s}.jsonl",
-                          repo_type="dataset"))
+                          repo_type="dataset", revision=sha))
 PY
-) || finish_fail "stage=dataset"
+mapfile -t SUBSET_FILES < "$STAGE_OUT"
+(( ${#SUBSET_FILES[@]} == 10 )) \
+  || finish_fail "stage=dataset lines=${#SUBSET_FILES[@]} (need 10: PIN + 9 subsets)"
 PIN=${SUBSET_FILES[0]#PIN }
-log_event DATASET_PIN "revision=$PIN subsets=${#SUBSET_FILES[@]} sub_n=$SUBSET_N"
+NSUB=$(( ${#SUBSET_FILES[@]} - 1 ))
+log_event DATASET_PIN "revision=$PIN subsets=$NSUB sub_n=$SUBSET_N"
 
 # ---- serve once ----
 if [[ $DRAFTER == mtp ]]; then
@@ -112,9 +116,9 @@ PY
     (( _quiet >= 2 )) && break
     _prev=$_n; sleep 5
   done
-  "$VENV/python" - "$LOG" "$off" "$s" >> "$OUT" 2>&1 << 'PYTAU' || finish_fail "stage=metric subset=$s"
-import csv, os, re, sys
-log, off, s = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+  "$VENV/python" - "$LOG" "$off" "$s" "$RESULTS_CSV" >> "$OUT" 2>&1 << 'PYTAU' || finish_fail "stage=metric subset=$s"
+import csv, re, sys
+log, off, s, csv_path = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
 pat = re.compile(r"Mean acceptance length: ([0-9.]+),.*Accepted: (\d+) tokens")
 a = t = 0
 for i, line in enumerate(open(log, errors="ignore")):
@@ -122,8 +126,10 @@ for i, line in enumerate(open(log, errors="ignore")):
     m = pat.search(line)
     if m: a += float(m.group(1)) * int(m.group(2)); t += int(m.group(2))
 tau = a / t if t else 0.0
+if t == 0:
+    sys.exit(f"no acceptance lines in log window — flush missed or format drift: subset={s}")
 print(f"SUBSET {s} {tau:.3f} accepted={t}")
-with open(os.environ["RESULTS_CSV"], "a", newline="") as f:
+with open(csv_path, "a", newline="") as f:
     csv.writer(f).writerow([s, f"{tau:.3f}", t])
 PYTAU
   log_event SUBSET_DONE "subset=$s $(grep "^SUBSET $s " "$OUT" | tail -1 | cut -d' ' -f3-)"
@@ -133,11 +139,11 @@ stop_server
 
 # ---- summary ----
 {
-  echo "## 9-subset profile — $NAME (temp $TEMP, interval-weighted τ)"
+  echo "## $NSUB-subset profile — $NAME (temp $TEMP, interval-weighted τ)"
   echo
   echo "| subset | τ | accepted tokens |"
   echo "|---|---|---|"
   tail -n +2 "$RESULTS_CSV" | awk -F, '{printf "| %s | **%s** | %s |\n", $1, $2, $3}'
 } | tee "$RUN_DIR/summary.md"
-w=$(tail -n +2 "$RESULTS_CSV" | awk -F, '{a+=$2*$3; t+=$3} END {printf "%.3f", a/t}')
-finish_ok "weighted_tau=$w subsets=9 temp=$TEMP pin=$PIN"
+w=$(tail -n +2 "$RESULTS_CSV" | awk -F, '$3 > 0 {a+=$2*$3; t+=$3} END {if (t) printf "%.3f", a/t}')
+finish_ok "weighted_tau=$w subsets=$NSUB temp=$TEMP pin=$PIN"

@@ -58,9 +58,11 @@ recorded here.
 - vLLM hidden-state extraction on W4A16: NaN tails + silently-wrong states
   (transformers-only extraction is mandatory, hardware-independent).
 - Selecting checkpoints by val loss at high LR: val loss improves while
-  acceptance declines — select by ladder, always. And select on the
-  **greedy** ladder: temp-1.0 τ is heavy-tailed (0.34 spread observed on
-  identical inputs); greedy repeat spread is ~0.05.
+  acceptance declines — select by ladder, always. And measure with the
+  right instrument: greedy τ (t=0) is the low-variance stability check
+  (spread ~0.05), shipping selection happens at the serving point
+  (t=0.7) with repeats — temp-1.0 τ is heavy-tailed (0.34 spread on
+  identical inputs) and cannot rank 0.1-τ differences at small n.
 
 
 ## GB10 anchor measurements (2026-10-14, runlib-era, fresh numbers only)

@@ -62,8 +62,19 @@ require_file() {
 }
 
 # launch_server <logfile> <cmd...> — nohup, record PID, log it.
+#   Refuses if the port is already serving: a stale leaked server would answer
+#   health checks and silently absorb the run's traffic.
 launch_server() {
   SERVER_LOG=$1; shift
+  local args=("$@") ptc=""
+  for ((i=0; i<${#args[@]}; i++)); do
+    if [[ ${args[i]} == "--port" ]]; then ptc=${args[i+1]:-}; break; fi
+  done
+  if [[ -n $ptc ]] && curl -s -m 2 "localhost:$ptc/health" >/dev/null 2>&1; then
+    log_event SERVER_PORT_BUSY "port=$ptc"
+    echo "launch_server: port $ptc already serving — stop it first (recorded PIDs live in runs/*/events.jsonl)" >&2
+    return 1
+  fi
   nohup "$@" > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
   log_event SERVER_LAUNCH "pid=$SERVER_PID" "log=$SERVER_LOG"
@@ -137,4 +148,4 @@ stop_server() {
 }
 
 finish_ok()  { log_event RUN_DONE  "status=ok" "$@"; }
-finish_fail() { log_event RUN_FAILED "status=fail" "$@"; exit 1; }
+finish_fail() { stop_server 2>/dev/null || true; log_event RUN_FAILED "status=fail" "$@"; exit 1; }
