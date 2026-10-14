@@ -24,7 +24,9 @@ cascade-v1 **0.1087** · cascade-v2 0.1120 · duo AWQ+GPTQ @512×384 0.1209
 
 ## Drafters (DFlash2, quant-aligned, 4B)
 
-Scaling ladder (fixed chat-heavy cascade blend, block 16, interval-weighted τ):
+Scaling ladder (fixed chat-heavy cascade blend, block 16, interval-weighted τ
+— pod-era single draws at t=1.0; superseded by the GB10 anchor tables below,
+which measure with repeats and per-temperature spreads):
 
 | rung | tokens | recipe | τ (b16) |
 |---|---|---|---|
