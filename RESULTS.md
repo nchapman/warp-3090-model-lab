@@ -66,33 +66,30 @@ recorded here.
 Ladder-20, interval-weighted τ, W4A16-GPTQ verifier unless noted; all runs
 under `runs/` with full event trails (`scripts/tail_run.sh`).
 
-Greedy (temp 0 — selection instrument):
+| checkpoint | τ @ t=0 | τ @ t=0.7 (serving) | τ @ t=1.0 |
+|---|---|---|---|
+| epoch 1 | 3.52 | 3.28 | 2.95 |
+| epoch 2 | 3.73 | 3.49 | 3.17 (n=2) |
+| epoch 4 | 4.20 (n=2) | 3.68 (n=4: 3.58-3.75) | 3.27 (n=2, spread 0.34) |
+| epoch 6 — shipped | 4.05 (n=2) | **3.79** (n=4: 3.71-3.85) | 3.25 (n=2) |
+| epoch 6 @ bf16 base | — | — | 3.32 |
+| epoch 4 @ bf16 base | 4.15 | — | — |
+| native MTP k=3 | 2.99 | 2.86 | 2.66 |
 
-| checkpoint | τ |
-|---|---|
-| epoch 4 | **4.19** (n=2: 4.218 / 4.171) |
-| epoch 6 (end of training) | 4.07 |
-| epoch 2 | 3.73 |
-| epoch 1 | 2.95→3.52* |
-| epoch 4 @ bf16 base | 4.15 |
-| native MTP k=3 | 2.99 |
+Serving-point sampling (t=0.7 / top_p 0.95 / top_k 20) exactly matches the
+corpus generation config (`regen_quant_all.py`; top_k inherited from the
+model's `generation_config.json`).
 
-Temp 1.0 (deployment metric — heavy-tailed, ±0.2):
+Conclusions:
 
-| checkpoint | τ |
-|---|---|
-| epoch 4 | 3.27 (n=2: 3.441 / 3.099) |
-| epoch 6 | 3.25 (n=2) |
-| epoch 6 @ bf16 base | 3.32 |
-| epoch 2 | 3.17 (n=2) |
-| native MTP k=3 | 2.66 |
-
-\* epoch-1 temp-1.0 run measured 2.954 pre-`TEMP` support; greedy 3.516.
-
-Conclusions: acceptance peaks at epoch 4 of 6 and declines by epoch 6
-(training longer does not help); the shipped drafter
-(`nchapman/Qwen3.5-4B-DFlash2`) is the epoch-4 checkpoint, selected on the
-greedy ladder after the temp-1.0 instrument proved unable to rank
-0.1-τ differences at small n.
+- **Ranking is temperature-dependent.** At t=0.7 τ rises monotonically to the
+  end of training — the shipped drafter is epoch 6, selected at the serving
+  point (ep6 3.79 vs ep4 3.68, 2.3 sigma at n=4 each). Under greedy the
+  picture inverts: epoch 4 peaks (4.20 vs 4.05). At t=1.0 they tie.
+- τ at t=1.0 is heavy-tailed (0.34 spread on identical inputs); t=0.7 spread
+  ~0.1, greedy ~0.05. Small-n point estimates at t>=1 cannot rank 0.1-tau
+  differences.
+- The shipped `nchapman/Qwen3.5-4B-DFlash2` beats native MTP by ~+1 tau at
+  every temperature.
 
 Full narrative: `docs/history/dflash2_research.md`, `docs/history/calib_v2_plan.md`.
