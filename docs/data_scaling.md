@@ -175,7 +175,10 @@ p90 4.6k exceeds it.
 Implicit, never-ablated ecosystem belief: structured domains (math/code)
 draft best (benchmarks agree: tau 6.5-7.8 math/code vs 4.4 chat).
 
-Ours vs the default: chat-heavy 65% / math 12.5% / no dedicated code —
-opposite direction from PerfectBlend. Mix is therefore an open dial our
-pilot can measure (natural vs PerfectBlend-shaped vs agent-heavy at
-matched supervised tokens) before the 4B rung commits.
+Ours vs the default: chat-heavy 65% / math 12.5% / code ~6% (measured on a
+3K-row sample: fences+pattern heuristic; chat 8%, terminal_agent 16%
+within-subset) — code share matches PerfectBlend's 7% dedicated source;
+the divergence is math (12.5% vs 39%) and chat (65% vs ~30%). Mix is
+therefore an open dial our pilot can measure (natural vs PerfectBlend-
+shaped vs agent-heavy at matched supervised tokens) before the 4B rung
+commits.

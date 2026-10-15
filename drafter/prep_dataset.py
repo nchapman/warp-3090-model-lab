@@ -74,6 +74,12 @@ def main():
                          "shape). last: only the final assistant turn "
                          "trainable — earlier turns are pure conditioning "
                          "(de-duplicated supervision)")
+    ap.add_argument("--max-tokens", type=int, default=0,
+                    help="drop rows longer than this many tokens (0 = no "
+                         "cap). Paper spec: 3072 (4096 for Coder); DSpark "
+                         "reference prep: 1024. Drop matches DSpark's "
+                         "prompt filter; truncation would cut responses "
+                         "mid-turn.")
     args = ap.parse_args()
 
     _, info = resolve(args.model)
