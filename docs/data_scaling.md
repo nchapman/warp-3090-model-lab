@@ -136,3 +136,26 @@ Data-scale reality from the field:
   No one measured a curve; our ladder is that instrument.
 - Recipe lead (champion-v2, filed with D-PACE/Draft-OPD): DFlare uses
   progressive gamma (4.5, +1/epoch) vs our fixed 7.
+
+## Currency ledger (2026-10-15): one unit for "amount of data"
+
+Canonical unit: UNIQUE SUPERVISED TOKENS (loss_mask=1, once per
+conversation); conversations as the diversity co-unit. Measured by
+drafter/data_audit.py. Rung 1 exact: 10,001,156 nominal -> 7,498,489
+unique (25% prefix duplication) -> 5,190,561 supervised-unique
+(nominal/supervised exchange 1.93x). Champion estimate (20K-row sample):
+~45% supervised share -> ~115-120M supervised-unique.
+
+Reference conversion (their samples -> estimated supervised tokens):
+5K example ~1.5-3M (dead, matches our rung 1); DFlash 100K-sample
+ablations ~20-50M (tau 4.9-5.6 greedy); DSpark 100K prompts <=1024
+prepared ~30-60M (tau 3.41); DFlare 270K-2.4M ~55M-1B (rising
+throughout). Unified picture: dead below ~5M supervised, known-good
+20-60M, ours 3.79 at ~115-120M.
+
+Orthogonality caveat: at matched supervised volume, short-exchange
+corpora carry ~3-4x more distinct conversations than our long-conv
+corpus. Supervised volume and conversation diversity are separate axes;
+our shape is volume-heavy/diversity-light. The 130M-nominal pod rung
+(~59-68M supervised) lands in the literature's known-good zone — the
+right place to detect a shape deficit at matched volume.
