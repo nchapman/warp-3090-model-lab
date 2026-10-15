@@ -107,3 +107,32 @@ was measured on this machine, so comparisons are same-instrument.
 - r40: pending r10 (pod-vs-local fork).
 - Results appended to `../llm-compressor/ladder/ladder_results.csv` and
   published into RESULTS.md when the curve is complete.
+
+## Literature check: is our data prep idiomatic? (2026-10-15)
+
+Verdict across DFlash paper (2602.06036), DFlare (2606.02091), speculators
+docs/CLI, NeMo Automodel recipe, DSpark repo, and SpecForge issue #465:
+
+| practice | idiom | ours |
+|---|---|---|
+| on-policy regen by the exact target | universal | yes (quant verifier, t=0.7 = eval temp) |
+| temp/template consistency train<->eval | author-enforced (failures at tau~1.0 otherwise) | yes (champion proves pipeline) |
+| assistant-only loss mask | universal | yes |
+| packing window | 8192 | yes (speculators multipack) |
+| sample shape | ONE conversation per sample; DFlash author's working recipe "used only the first turn" (1.2M samples, 6-layer, 3ep -> tau 6.3) | NO — turn-prefix rows re-supervise early turns (reshape `merged`/`first`/`last` fix this) |
+| length | short single exchanges (~1k); paper extends 4K->32K via 1.6K-sample fine-tune | median 1.7k, p90 4.6k — acceptable, `short` arm tests the idiom |
+| min-trainable-tokens filter | speculators --minimum-valid-tokens | missing (minor; add to prep) |
+
+Data-scale reality from the field:
+- DFlash paper ablations ran at 100K samples (short exchanges) with good
+  results; headline models 800K. Nobody publishes below ~100K samples.
+- DFlare scales 270K -> 2.4M samples (Qwen3-8B): tau rising the whole way,
+  "likely to yield further gains" at the end. Our whole 10M-260M-token
+  ladder sits BELOW their smallest measured point.
+- SpecForge #465: multiple users with official script + official regen data
+  collapsing to tau 1.02-1.05 — our exact rung-1 number. Author's
+  resolutions: 175K samples = "poor" (one failure explained), 1.2M first-
+  turn = tau 6.3, single-sample overfit case = teacher-forcing artifact.
+  No one measured a curve; our ladder is that instrument.
+- Recipe lead (champion-v2, filed with D-PACE/Draft-OPD): DFlare uses
+  progressive gamma (4.5, +1/epoch) vs our fixed 7.

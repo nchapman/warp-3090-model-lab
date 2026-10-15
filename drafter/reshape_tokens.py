@@ -10,6 +10,9 @@ Modes (--shape):
   merged   one row per conversation: keep only the max-turn row per conv
            (every assistant token supervised exactly once, conditioning =
            full conversation prefix)
+  first    one row per conversation: keep only the FIRST row (first
+           exchange) — the DFlash-author idiom ("used only the first
+           turn", SpecForge #465): short, no cross-turn conditioning
   short    merged + drop conversations whose tokenized length exceeds
            --max-len (reference-repo style: short samples only)
 
@@ -38,7 +41,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--jsonl", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--shape", choices=["prefix", "merged", "short"],
+    ap.add_argument("--shape", choices=["prefix", "merged", "first", "short"],
                     default="merged")
     ap.add_argument("--max-len", type=int, default=1024,
                     help="short mode: drop convs longer than this many "
@@ -58,7 +61,11 @@ def main():
                 n_unmatched += 1
                 key = (r.get("id", f"row{n_rows}"), 0)
             conv, turn = key
-            if conv not in best or turn > best[conv][0]:
+            if args.shape == "first":
+                keep = conv not in best or turn < best[conv][0]
+            else:
+                keep = conv not in best or turn > best[conv][0]
+            if keep:
                 best[conv] = (turn, r)
 
     kept = [r for _, r in best.values()]
