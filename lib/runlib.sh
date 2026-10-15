@@ -171,3 +171,36 @@ _runlib_on_exit() {
     log_event RUN_FAILED "status=fail unexpected_exit=$rc"
   fi
 }
+
+# Liveness watchdog: while a long foreground command runs, fail the stage if its
+# log stops growing (silent stall — process alive, no progress). Epoch-boundary
+# checkpoint/val windows can pause logging for 15-20 min, so the default
+# staleness budget is 30 min (LADDER_STALE_MIN overrides).
+run_with_watchdog() {  # run_with_watchdog <logfile> <cmd...>
+  local log=$1; shift
+  local max_rounds=$(( ${LADDER_STALE_MIN:-30} / 2 ))
+  "$@" >> "$log" 2>&1 &
+  local cmd_pid=$!
+  local last_size=-1 stale_rounds=0
+  while kill -0 "$cmd_pid" 2>/dev/null; do
+    sleep 120
+    kill -0 "$cmd_pid" 2>/dev/null || break
+    local size; size=$(stat -c %s "$log" 2>/dev/null || echo 0)
+    if (( size == last_size )); then
+      stale_rounds=$(( stale_rounds + 1 ))
+      if (( stale_rounds >= max_rounds )); then
+        log_event WATCHDOG_FAIL "stage_log_stale_min=$(( stale_rounds * 2 )) log=$log pid=$cmd_pid"
+        kill -TERM "$cmd_pid" 2>/dev/null || true
+        sleep 30
+        pkill -KILL -P "$cmd_pid" 2>/dev/null || true
+        kill -KILL "$cmd_pid" 2>/dev/null || true
+        wait "$cmd_pid" 2>/dev/null
+        return 1
+      fi
+    else
+      stale_rounds=0
+    fi
+    last_size=$size
+  done
+  wait "$cmd_pid"
+}
