@@ -39,6 +39,22 @@ ladder brackets exactly that gap (rung 1 = ~their smoke scale, champion =
 1/8 paper scale) with measured tau; rung 1's number is a useful public
 datapoint regardless of where the knee lands.
 
+## First measured point (rung 1, 2026-10-15)
+
+**10M tokens (3,257 convs, 6 epochs = 60M effective): tau = 1.05 @ t=0.7,
+n=4 (winner: epoch 2; all six epochs flat 1.04-1.05).**
+
+The drafter is non-viable at this scale — acceptance pinned at chance.
+This is a real data cliff, not a pipeline artifact: extraction parity
+20/20; training converged smoothly (loss 2.90 -> 2.76, recall@16 up
+0.274 -> 0.299); teacher-forced val accept length itself only 1.19 ->
+1.21 with oracle top-16 at ~2.0 (the candidate set barely contains the
+target's tokens); and the same sweep pipeline scored the champion's
+epoch 0 (260M tokens seen) at 3.407 yesterday. The "smoke pole" in the
+table above is therefore literally useless as a drafter, not merely
+suboptimal. The knee lives somewhere in 30-100M; rung 2 (40M) is the
+decisive experiment.
+
 So "we need ~260M tokens" is an assumption inherited from the paper + disk
 geometry. The ladder tests it. If the curve is flat well below 260M, the 9B
 and 27B campaigns shrink accordingly (27B at 40M-equivalent = ~1.2TB states —
