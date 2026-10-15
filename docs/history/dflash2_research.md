@@ -847,3 +847,14 @@ candidate-coverage collapse (recall@16 ~0.30) — no loss reorganization
 creates missing knowledge. Recipe levers apply only after data
 sufficiency. For 9B/27B planning: achievable tau ceiling is likely well
 above the 3.79 anchor.
+
+Correction + plateau framing (same day, after reading both abstracts):
+D-PACE is quality-at-fixed-cost (2.3% overhead, no epoch reduction) —
+not a time saver. Draft-OPD's plateau mechanism ("SFT quickly plateaus:
+offline-to-inference mismatch") describes our offline-SFT pipeline; the
+cost play is same-tau-from-smaller-corpus, not less-training. Local
+sleeper: OPD consumes states in-flight (target already served locally
+by every sweep) — the ~2TB states disk disappears; 40-60M online-OPD
+on GB10 becomes a plausible weekend run. Sequencing stays: ladder on
+frozen recipe first (130M rung), then champion-v2 recipe stack, then
+revisit local online-OPD for 9B/27B only if the dividend is measured.
