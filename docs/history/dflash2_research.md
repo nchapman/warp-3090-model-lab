@@ -822,3 +822,28 @@ cosine, stopped at epoch 2. Every deviation lost.**
 3. **Blend is the weaker dial**: data SCALE moved +0.52 per 9x (29M->260M);
    STOPPING moved +0.19 (ep2 vs ep6). Blend moved <=0 through every
    fine-tune we ran. Budget priority follows.
+
+## Recipe follow-ups beyond our campaign (filed 2026-10-15, not adopted yet)
+
+Nicholas Liu, "Pushing DFlash2 Further: Training Where the Draft Breaks"
+(X article). Two trainer-side changes, fixed data: tau 3.591 -> 4.887,
+speedup 2.514x -> 3.341x (external anchor: their baseline ~ our champion
+3.79, different target).
+
+- **D-PACE** (arXiv:2605.18810): replaces static decay gamma (our
+  `--dflash-decay-gamma 7`) with per-draft adaptive weights from a
+  differentiable accepted-length proxy (P_m = prod q~_i, w_j = sum_{m>=j}
+  P_m). Self-contained loss change — patchable into our speculators fork
+  (we already patch fp8 states loading). Champion-v2 candidate; est.
+  +10-15% tau alone by their ablation proportions.
+- **Draft-OPD** (arXiv:2605.29343): train from verification boundaries
+  (anchor at rejection points + the failed proposal); fwd KL on accepted
+  tokens, rev KL on rejected suffix (peak at first rejection). Needs
+  online/on-policy collection — speculators online mode exists but this
+  is a trainer fork. HOLD: champion-v2 campaign, pod-sized.
+
+Ladder interaction: orthogonal to the data question. Rung 1 died of
+candidate-coverage collapse (recall@16 ~0.30) — no loss reorganization
+creates missing knowledge. Recipe levers apply only after data
+sufficiency. For 9B/27B planning: achievable tau ceiling is likely well
+above the 3.79 anchor.
