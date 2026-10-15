@@ -29,13 +29,15 @@ External reference points (checked 2026-10-15):
 | DFlash2 paper (arXiv:2602.06036) | 800K samples | quality recipe |
 | NeMo Automodel `qwen3_dflash2.yaml` | no fixed count (placeholder; params = our champion recipe lineage: 6e-4, 6ep, warmup 0.04, block 16, 5 layers) | "PerfectBlend, regenerate first" |
 | vllm-project/speculators example `dflash2_qwen3_8b_ultrachat_online_5k.sh` | **5k samples** (on-policy regen, pretokenized input_ids+loss_mask, seq 8192, 5ep, lr 3e-4) | "with just 5k samples, performance will not be very good... sanity check" |
+| rasyosef/train-dspark-draft-models (DSpark, Llama-3.2) | **100k Open PerfectBlend prompts**, on-policy regen (same doctrine), 3ep, <=1k-tok samples (~100M tok), 8192 packing window | published drafter recipe; no sample-count ablation (80k appears only as a Kaggle free-tier budget) — likely the anchor for our own 100k-conversation corpus size |
 
 Notable: nobody between the paper (800K) and the smoke example (5k)
 publishes a measured requirement — the ecosystem has a quality pole and a
-smoke pole and nothing in between. Our ladder brackets exactly that gap
-(rung 1 = ~their smoke scale, champion = 1/8 paper scale) with measured
-tau; rung 1's number is a useful public datapoint regardless of where the
-knee lands.
+smoke pole and nothing in between (the DSpark repo's 100k is the same
+unmeasured convention, matching our champion's conversation count). Our
+ladder brackets exactly that gap (rung 1 = ~their smoke scale, champion =
+1/8 paper scale) with measured tau; rung 1's number is a useful public
+datapoint regardless of where the knee lands.
 
 So "we need ~260M tokens" is an assumption inherited from the paper + disk
 geometry. The ladder tests it. If the curve is flat well below 260M, the 9B
