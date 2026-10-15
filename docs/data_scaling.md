@@ -159,3 +159,23 @@ corpus. Supervised volume and conversation diversity are separate axes;
 our shape is volume-heavy/diversity-light. The 130M-nominal pod rung
 (~59-68M supervised) lands in the literature's known-good zone — the
 right place to detect a shape deficit at matched volume.
+
+## Mix doctrine in the references (2026-10-15)
+
+Nobody ablates training-data mix — DFlash 5.4.1 "Training Data" is a
+same-data EAGLE-3 comparison, not a mix study. What exists is ecosystem
+convergence: DSpark repo / NeMo recipe / speculators demo / SpecForge all
+use Open-PerfectBlend = math 39% (MetaMath 26 + OrcaMath 13), chat ~30%
+(UltraChat 14 + UltraFeedback 12 + lmsys 4), IF 16% (UltraInteract 19 +
+AutoIF 4), code 7% (evol-codealpaca), dedup'd (-88K). Papers use Nemotron
+PT V2 + CodeAlpaca (+Step-3.5-Flash-SFT in DFlare), general blends with
+explicit code share. Paper spec: max seq 3072 (4096 Coder) — our corpus
+p90 4.6k exceeds it.
+
+Implicit, never-ablated ecosystem belief: structured domains (math/code)
+draft best (benchmarks agree: tau 6.5-7.8 math/code vs 4.4 chat).
+
+Ours vs the default: chat-heavy 65% / math 12.5% / no dedicated code —
+opposite direction from PerfectBlend. Mix is therefore an open dial our
+pilot can measure (natural vs PerfectBlend-shaped vs agent-heavy at
+matched supervised tokens) before the 4B rung commits.
