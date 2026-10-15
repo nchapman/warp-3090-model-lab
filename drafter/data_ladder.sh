@@ -48,7 +48,7 @@ if [[ ! -f "$WORK/rung_$NAME.jsonl" ]]; then
     --tokens $(( MILL * 1000000 )) --out "$WORK/rung_$NAME.jsonl" \
     --quant "$QUANT" > "$RUN_DIR/slice.log" 2>&1 || finish_fail "stage=slice"
 fi
-tail -1 "$RUN_DIR/slice.log" || true
+tail -1 "$RUN_DIR/slice.log" 2>/dev/null || true
 [[ -s "$WORK/rung_$NAME.jsonl" ]] || finish_fail "empty rung slice"
 
 # 2) tokenize
@@ -105,16 +105,50 @@ if (( nhs < nrows )); then
     || finish_fail "stage=extract"
 fi
 
+# Liveness watchdog: while a long foreground command runs, fail the stage if its
+# log stops growing (silent stall — process alive, no progress). Epoch-boundary
+# checkpoint/val windows can pause logging for 15-20 min, so the default
+# staleness budget is 30 min (LADDER_STALE_MIN overrides).
+run_with_watchdog() {  # run_with_watchdog <logfile> <cmd...>
+  local log=$1; shift
+  local max_rounds=$(( ${LADDER_STALE_MIN:-30} / 2 ))
+  "$@" >> "$log" 2>&1 &
+  local cmd_pid=$!
+  local last_size=-1 stale_rounds=0
+  while kill -0 "$cmd_pid" 2>/dev/null; do
+    sleep 120
+    kill -0 "$cmd_pid" 2>/dev/null || break
+    local size; size=$(stat -c %s "$log" 2>/dev/null || echo 0)
+    if (( size == last_size )); then
+      stale_rounds=$(( stale_rounds + 1 ))
+      if (( stale_rounds >= max_rounds )); then
+        log_event LADDER_WATCHDOG_FAIL "stage_log_stale_min=$(( stale_rounds * 2 )) log=$log pid=$cmd_pid"
+        kill -TERM "$cmd_pid" 2>/dev/null || true
+        sleep 30
+        pkill -KILL -P "$cmd_pid" 2>/dev/null || true
+        kill -KILL "$cmd_pid" 2>/dev/null || true
+        wait "$cmd_pid" 2>/dev/null
+        return 1
+      fi
+    else
+      stale_rounds=0
+    fi
+    last_size=$size
+  done
+  wait "$cmd_pid"
+}
+
 # 6) train — champion recipe, sdpa on GB10, per-epoch checkpoints
 if [[ ! -d "$WORK/draft_$NAME/5" ]]; then
-  "$VENV/bin/speculators" train \
+  run_with_watchdog "$RUN_DIR/train.log" \
+    "$VENV/bin/speculators" train \
     --speculator-type dflash2 --draft-attn-impl sdpa \
     --from-pretrained "$WORK/draft_init_v4" \
     --verifier-name-or-path "$QUANT" --data-path "$WORK/ds_$NAME" \
     --epochs 6 --lr 6e-4 --scheduler-type cosine --scheduler-warmup-ratio 0.04 \
     --dflash-decay-gamma 7 --max-anchors 512 --checkpoint-freq 1 \
     --train-data-ratio 0.950606 --log-freq 10 --save-path "$WORK/draft_$NAME" \
-    > "$RUN_DIR/train.log" 2>&1 || finish_fail "stage=train"
+    || finish_fail "stage=train"
 fi
 
 # 7) sweep at serving temp — best epoch, pooled n=4 (1 + 3 repeats)
