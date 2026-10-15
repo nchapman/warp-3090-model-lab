@@ -146,7 +146,7 @@ if [[ ! -d "$WORK/draft_$NAME/5" ]]; then
     --from-pretrained "$WORK/draft_init_v4" \
     --verifier-name-or-path "$QUANT" --data-path "$WORK/ds_$NAME" \
     --epochs 6 --lr 6e-4 --scheduler-type cosine --scheduler-warmup-ratio 0.04 \
-    --dflash-decay-gamma 7 --max-anchors 512 --checkpoint-freq 1 \
+    --dflash-decay-gamma 7 --max-anchors 512 --checkpoint-freq "${LADDER_CKPT_FREQ:-1}" \
     --train-data-ratio 0.950606 --log-freq 10 --save-path "$WORK/draft_$NAME" \
     || finish_fail "stage=train"
 fi

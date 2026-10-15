@@ -41,6 +41,9 @@ RUN_CMD="sweep_epochs.sh $* (TEMP=$TEMP TOPK=$SWEEP_TOPK REPEATS=$SWEEP_REPEATS 
 epochs=()
 for d in "$PARENT"/*/; do
   d=${d%/}
+  # Only numeric per-epoch dirs: skip sub-epoch symlinks (epochN_stepM),
+  # epochN_end links, and checkpoint_best — crash insurance, not sweep candidates.
+  [[ "$(basename "$d")" =~ ^[0-9]+$ ]] || continue
   [[ -f "$d/model.safetensors" ]] && epochs+=("$d")
 done
 (( ${#epochs[@]} >= 2 )) || { log_event SWEEP_FAILED "reason=need>=2 checkpoint dirs with model.safetensors"; finish_fail "reason=no-epochs"; }
