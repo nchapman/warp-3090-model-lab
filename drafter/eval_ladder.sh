@@ -54,7 +54,7 @@ json.dump(c, open(p, "w"), indent=1)
 PYCFG
 
 launch_server "$LOG" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
-  "$VENV/vllm" serve "$EVAL_DIR" --port "$PORT" --max-model-len 8192 \
+  "$VENV/vllm" serve "$EVAL_DIR" --port "$PORT" --max-model-len 8192 --gpu-memory-utilization "${GPU_MEM_UTIL:-0.6}" \
   ${EXTRA_SERVE_ARGS:-} \
   || finish_fail "stage=server-launch"
 wait_healthy "$PORT" || finish_fail "stage=health"

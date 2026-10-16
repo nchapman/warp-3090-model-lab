@@ -66,7 +66,7 @@ log_event DATASET_PIN "revision=$PIN subsets=$NSUB sub_n=$SUBSET_N"
 # ---- serve once ----
 if [[ $DRAFTER == mtp ]]; then
   launch_server "$RUN_DIR/server.log" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
-    "$VENV/vllm" serve "$QUANT" --port "$PORT" --max-model-len 8192 \
+    "$VENV/vllm" serve "$QUANT" --port "$PORT" --max-model-len 8192 --gpu-memory-utilization "${GPU_MEM_UTIL:-0.6}" \
     --speculative-config "{\"method\": \"mtp\", \"num_speculative_tokens\": $SPEC}" \
     ${EXTRA_SERVE_ARGS:-} || finish_fail "stage=server-launch"
 else
@@ -86,7 +86,7 @@ for m in c["speculators_config"]["proposal_methods"]:
 json.dump(c, open(p, "w"), indent=1)
 PYCFG
   launch_server "$RUN_DIR/server.log" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
-    "$VENV/vllm" serve "$EVAL_DIR" --port "$PORT" --max-model-len 8192 \
+    "$VENV/vllm" serve "$EVAL_DIR" --port "$PORT" --max-model-len 8192 --gpu-memory-utilization "${GPU_MEM_UTIL:-0.6}" \
     ${EXTRA_SERVE_ARGS:-} || finish_fail "stage=server-launch"
 fi
 wait_healthy "$PORT" || finish_fail "stage=health"

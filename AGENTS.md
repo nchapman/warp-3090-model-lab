@@ -111,7 +111,13 @@ inter-step overhead — wall is ~1.7–2× step_ms. Plan in hours/epoch
 **GB10 reality.** Bandwidth-starved (~17.6× off H200): extraction and
 training both ~2k tok/s class. nvidia-smi memory reads [N/A]; 30–70W
 at 96% util is normal load, not idle. A hung nvidia-smi can hold
-/dev/nvidia0 — kill by exact PID (never pkill patterns).
+/dev/nvidia0 — kill by exact PID (never pkill patterns). **UNIFIED
+memory (121 GiB, CPU+GPU shared): vLLM's default 0.9 gpu-mem-util
+reserves ~109 GiB and OOM-kills the whole userspace once client load
+lands (2026-10-16: pipewire/llama-swap/session died mid-run). Always
+serve with an explicit --gpu-memory-utilization ≤ 0.6 (regen_pool.sh
+defaults REGEN_GPU_MEM=0.6) — the box is shared with llama-swap and a
+desktop session.**
 
 **Models registry.** `models.py` keys: 4b (champion, taps_v4
 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24], local quant
