@@ -54,7 +54,8 @@ def assemble_wave(steps, outputs):
                     target = i
                     break
             if target is None:
-                unmatched += 1
+                if live:  # trailing steps after all requests finished are fine
+                    unmatched += 1
                 continue
             r = reqs[target]
             n = n_sampled[slot]
