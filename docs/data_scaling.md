@@ -175,10 +175,13 @@ p90 4.6k exceeds it.
 Implicit, never-ablated ecosystem belief: structured domains (math/code)
 draft best (benchmarks agree: tau 6.5-7.8 math/code vs 4.4 chat).
 
-Ours vs the default: chat-heavy 65% / math 12.5% / code ~6% (measured on a
-3K-row sample: fences+pattern heuristic; chat 8%, terminal_agent 16%
-within-subset) — code share matches PerfectBlend's 7% dedicated source;
-the divergence is math (12.5% vs 39%) and chat (65% vs ~30%). Mix is
-therefore an open dial our pilot can measure (natural vs PerfectBlend-
-shaped vs agent-heavy at matched supervised tokens) before the 4B rung
-commits.
+Ours vs the default — EFFECTIVE mix (supervised tokens, measured 8K-row
+sample): chat 87.3% / terminal_agent 9.2% / IF 1.9% / conv-agent 1.6% /
+**math 0% / science 0%**. The file's 12.5% math + 8% science rows (30,252)
+are prompt-only (no assistant turn; MMLU-style multi-choice, up to 19.9K
+chars) — dropped by prep, never trained on. Code ≈ 6% of live content
+(comparable to PerfectBlend's 7% source). So vs every reference we are
+math-ZERO, not math-light; regenerating the dead prompts yields short
+pick-a-letter responses (mediocre) — a real math share means pulling
+MetaMath/ORCA-style prompts and regenerating on-policy. Mix remains an
+unmeasured dial anywhere in the field; our pilot can measure it.

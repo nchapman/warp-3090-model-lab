@@ -68,10 +68,16 @@ Nominal row-tokens ≠ unique ≠ supervised: rung 1's "10M" was 7.5M unique
 145,018 rows / ~100K convs / 260M nominal ≈ **115–120M supervised**.
 Rows are conversation-turn PREFIXES (`v4-<i>-turnN`); turn-N contains
 turns 1..N (early turns re-supervised, contexts re-extracted).
-- Mix (measured, not labels): chat 65% / math 12.5% / science 8% /
-  IF 5% / conv-agent 5% / terminal-agent 3.6%; **code ≈ 6%** (fence+
-pattern heuristic, 3K-row sample — same as PerfectBlend's 7% code source;
-the divergence is MATH 12.5 vs their 39, CHAT 65 vs their ~30).
+- Mix — TWO layers, don't conflate: (a) file rows: chat 65% / math 12.5% /
+  science 8% / IF 5% / conv-agent 5% / terminal-agent 3.6%; (b) **EFFECTIVE
+  trained mix (supervised tokens): chat 87.3% / terminal_agent 9.2% / IF
+  1.9% / conv-agent 1.6% / MATH 0% / SCIENCE 0%** — 30,252 math+science
+  rows (21% of file) are PROMPT-ONLY (no assistant turn; MMLU-style,
+  huge prompts), dropped by prep's sum(mask)>0 filter. Slice budgets
+count only live rows (slice_rungs applies prep filters) — slices were
+  never contaminated. Code ≈ 6% of chat/agent content (measured).
+  Compared to references: PerfectBlend is 39% math — our effective corpus
+  is math-ZERO.
 - Length: mean 2,115 / median 1,676 / p90 4,588 / p99 6,207 tokens —
 **uncapped**; DFlash paper spec caps at 3072. DSpark reference preps ≤1024.
 - Shape tooling: `drafter/reshape_tokens.py` (prefix/merged/first/short),
