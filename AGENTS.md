@@ -12,7 +12,10 @@ learned the hard way.
 - Inspect any run with `bash scripts/tail_run.sh [prefix]` — never go hunting
   for log paths manually.
 - Servers die by the PID recorded in the SERVER_LAUNCH event (`stop_server`).
-  Never `pkill` by pattern — it has killed our own shell twice.
+  Never `pkill`/`pgrep -f` by pattern — it has killed our own shell FOUR
+  times (pattern text appears in your own cmdline). Recorded PIDs only; if
+  you must pattern-match, build the pattern from concatenated shell variables
+  so your own cmdline doesn't contain it.
 - Never edit a script while an instance of it is running.
 - vLLM serving with speculative decoding can wedge silently during CUDA-graph
   capture — pass `EXTRA_SERVE_ARGS="--enforce-eager"` if a spec-decode server
@@ -73,8 +76,8 @@ supervised: rung 1's "10M" was 7.5M unique (25% prefix dup) = **5.2M
 supervised** (1.93× exchange). `drafter/data_audit.py` measures all of
 these — run it, never guess.
 
-**Corpus** (`../llm-compressor/artifacts/v4_data/regen_all.jsonl`):
-145,018 rows / ~100K convs / 260M nominal. **THIS FILE IS THE REGEN
+**Corpus** (`data/context_pool.jsonl`, sha-pinned; read-only copy of the
+v4 regen input): 145,018 rows / ~100K convs / 260M nominal. **THIS FILE IS THE REGEN
 INPUT, NOT A CORPUS** — it is slice_a+slice_b regrouped by conversation:
 bare contexts, every row ends user/tool, ZERO regenerated responses.
 The final assistant turn of every conversation is absent; single-turn
@@ -104,10 +107,11 @@ quoted (incl. champion 3.79) is general-chat τ. No code/agentic/long
 eval exists. Don't claim deployment relevance without one.
 
 **Measured anchors (τ @ t=0.7 n=4 unless noted):** 4B 5.2M supervised →
-**1.05 flat** (dead — coverage collapse, recall@16 0.30); 4B ~117M →
-**3.79**; epoch-0 control 3.407. External: DSpark 100K prompts ≤1024 →
-3.41; DFlash 100K-sample ablations → 4.9–5.6 greedy. Dead zone < ~5M
-supervised (two sources); known-good 20–60M; rising to ~1B (DFlare).
+1.05 flat (UNSOUND — off-policy artifact, see corpus section; do not
+quote as a dead-zone number); 4B ~150M → **3.79**; epoch-0 control 3.407.
+External: DSpark 100K prompts ≤1024 → 3.41; DFlash 100K-sample ablations
+→ 4.9–5.6 greedy. Dead zone < ~5M supervised (two sources); known-good
+20–60M; rising to ~1B (DFlare).
 
 **Trainer behavior.** Multipack sampler re-shuffles per epoch (seed+epoch)
 → epoch step-counts vary (rung 1: 1,310–1,850+); `step_ms` excludes
@@ -135,7 +139,18 @@ nvidia/Nemotron-Cascade-2-SFT-Data (checksum-pinned in data/MANIFEST.sha256;
 build_calib_mix.py's 9-bucket spec does NOT match the frozen file — provenance
 gap, document-before-rebuild). All quants to date share this lineage.**
 
-**Literature idiom (verified from primary sources).** On-policy regen at
-eval temp; one conv per sample (first-turn common); short or capped
-lengths; PerfectBlend = ecosystem default mix, NOBODY ablates mix;
-`minimum-valid-tokens` filter (speculators) — we lack it.
+**Regen doctrine (the standing per-model process).** Contexts are the
+shared invariant; every target model regenerates finals ON-POLICY with its
+deployed quant: `drafter/regen_pool.sh <model-key>`. Sampling =
+`models.py SERVING_PARAMS` (t 0.7 / top_p 0.95 / top_k 20 — the deployment
+point + DFlash2 distribution pair), also stamped into every quant's
+generation_config.json at quant time. Outputs land in `data/` (this repo).
+GB10 measured: conc 128, MTP off (spec-decode LOSES at saturation:
+313 vs 249 rows/min), GPU_MEM_UTIL=0.6. Historical: the champion's v1
+regen predates SERVING_PARAMS and lacked top_k.
+
+**Literature idiom (verified from primary sources).** On-policy regen
+by the exact deployed target; one conv per sample (first-turn common);
+short or capped lengths (paper 3072; DSpark ≤1024); PerfectBlend =
+ ecosystem default mix and NOBODY ablates mix; `minimum-valid-tokens`
+filter (speculators) — we lack it.

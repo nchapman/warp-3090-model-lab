@@ -9,8 +9,9 @@ kernels), ~15GB weights leaving ~8GB for KV, and drafters trained against the
 What this repo reproduces (see `RESULTS.md` for all numbers):
 
 - **Quants**: W4A16 GPTQ for the Qwen 3.5 release family (3.5-native, 3.6
-  upgrades, 3.8-only — all one architecture class) with the cascade
-  calibration blend: weightedKL 0.1087 (4B) / 0.0889 (9B) / 0.1264 (27B).
+  upgrades, 3.8-only — all one architecture class) with the cascade-v1
+  calibration set (999 Nemotron-Cascade-2 conversations): weightedKL
+  0.1087 (4B) / 0.0889 (9B) / 0.1264 (27B).
 - **Drafters**: quant-aligned DFlash2 block-diffusion speculative drafters —
   the 4B drafter hits τ 3.79 at the serving point (interval-weighted
   acceptance, block 16, temp 0.7) / 4.05 greedy, vs full native MTP 2.86 /
@@ -57,6 +58,7 @@ MANIFEST.sha256 --quiet)` locally; hash pulled artifacts yourself) → teardown.
 | key | model | gen | layers/hidden | taps (aux+final) | quant | drafter |
 |---|---|---|---|---|---|---|
 | `4b` | Qwen/Qwen3.5-4B | 3.5 | 32 / 2560 | [2,10,17,24,29]+32 | ✅ 0.1087 | ✅ τ 3.79 |
+| `0.8b` | Qwen/Qwen3.5-0.8B | 3.5 | 24 / 1024 | [2,8,12,16,20]+24 | ✅ local | ⬜ pilot |
 | `9b` | Qwen/Qwen3.5-9B | 3.5 | 32 / 4096 | same depth | ✅ 0.0889 | ⬜ untested |
 | `27b` | Qwen/Qwen3.8-27B | 3.8 | 64 / 5120 | [2,17,32,47,61]+64 | ✅ 0.1264 | ⬜ NO-GO |
 
@@ -67,8 +69,8 @@ stay "untested" in `RESULTS.md` until someone runs them.
 ## Sequence 1 — reproduce a quant (quant venv; 4B ≈ 24GB, ~2h)
 
 ```bash
-python quant/quantize.py --model 4b          # gptq + cascade calib, 999x4096 (defaults)
-python quant/probe.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ-cascade \
+python quant/quantize.py --model 4b          # gptq + cascade-v1 calib, 999x4096 (defaults)
+python quant/probe.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ \
     --eval_set data/probe-v4.jsonl --tag repro
 # expect weightedKL ≈ 0.1087; also probe data/probe-guard.jsonl (OOD check)
 ```
@@ -81,16 +83,21 @@ Build new calib/probe sets with `quant/build_calib.py` (raw pool goes in
 ## Sequence 2 — drafter, small scale (drafter venv; Spark or any 24GB+ GPU)
 
 ```bash
-python drafter/slice_convs.py --preset small --quant ./Qwen3.5-4B-W4A16-GPTQ-cascade
-vllm serve ./Qwen3.5-4B-W4A16-GPTQ-cascade --port 8138 &     # the DEPLOYED quant
+python drafter/slice_convs.py --preset small --quant ./Qwen3.5-4B-W4A16-GPTQ
+vllm serve ./Qwen3.5-4B-W4A16-GPTQ --port 8138 &     # the DEPLOYED quant
 python drafter/regen.py slices/s_train.jsonl slices/s_regen.jsonl slices/s_merged.jsonl --model 4b
-python drafter/prep_dataset.py --jsonl slices/s_merged.jsonl --out ds_small --quant ./Qwen3.5-4B-W4A16-GPTQ-cascade
-python drafter/extract_states.py --dataset ds_small --verifier ./Qwen3.5-4B-W4A16-GPTQ-cascade \
+python drafter/prep_dataset.py --jsonl slices/s_merged.jsonl --out ds_small --quant ./Qwen3.5-4B-W4A16-GPTQ
+python drafter/extract_states.py --dataset ds_small --verifier ./Qwen3.5-4B-W4A16-GPTQ \
     --out ds_small --model 4b --parity 20
-python drafter/bootstrap_draft.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ-cascade --out draft_init
+python drafter/bootstrap_draft.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ --out draft_init
 # train command: drafter/train.md (small-scale section; sdpa on Spark)
 bash drafter/eval_ladder.sh draft_small/0 small 15 8151      # expect τ ≈ 2.18
 ```
+
+Full-corpus regen (any registered model) is one command —
+`drafter/regen_pool.sh <model-key>` serves the deployed quant with
+`models.py SERVING_PARAMS` and regenerates every context's final,
+resume-safe; outputs land in `data/`.
 
 The two rules that are not optional: states come from a **transformers**
 forward on the quant (vLLM extraction is corrupt on W4A16 — any hardware),
@@ -122,7 +129,7 @@ breaks cross-run comparability. Verify your checkout:
 
 | file | what | provenance |
 |---|---|---|
-| `calib-cascade-v1.jsonl` | champion calibration set (999 rows) | cascade pool, stratified card blend, SEED 0 |
+| `calib-cascade-v1.jsonl` | champion calibration set (999 rows) | 100% nvidia/Nemotron-Cascade-2-SFT-Data, dataset-native proportions (verified 2026-10-16) |
 | `probe-v4.jsonl` | frozen 378-row fidelity ruler (the weightedKL metric) | cascade pool per V4_TARGETS + Belebele 10×9 langs |
 | `probe-guard.jsonl` | OOD guard (no_robots 40 + Belebele 4×9 langs) | no_robots **train** split (verified vs cached upstream arrows) + facebook/belebele |
 | `ladder-20.jsonl` | the 20 held-out eval prompts (the τ metric) | rows 50–69 of the v1-era 100-row cascade dev set (`dflash_data_v1`), frozen since the first DFlash2 run; hash-banned from drafter training, disjoint from the probes. Prompt texts recur inside calib rows (both cascade-derived) — affects no quoted number |
@@ -171,16 +178,20 @@ live at the `quant_repo` ids in `models.py` (`nchapman/Qwen3.5-4B-W4A16-GPTQ`,
 generation as `calib-cascade-v1`). The champion drafter lives at
 `nchapman/Qwen3.5-4B-DFlash2` (standard speculators naming — model it drafts
 for, no quant marker: measured drafting against both the quant verifier and
-the bf16 base; weights sha256 in the card). Earlier
-drafter generations (v3, v3.5), the v4 per-epoch snapshots, and the regen
-corpus stay local research record under `../llm-compressor/artifacts/` —
-rebuildable via this repo's pipeline, deliberately not published.
+the bf16 base; weights sha256 in the card). Earlier drafter generations
+(v3, v3.5) and the v4 per-epoch snapshots stay as local research record
+under `../llm-compressor/artifacts/` (read-only archive — never written to).
+The regen context pool is IN this repo (`data/context_pool.jsonl`,
+sha-pinned) and per-model regen outputs land in `data/` (gitignored,
+pinned when frozen).
 
-**Naming rule:** local quant dirs carry a `-cascade` suffix (e.g.
-`Qwen3.5-4B-W4A16-GPTQ-cascade`) — it marks the calibration generation
-(`calib-cascade-v1`). The Hub repos use the bare ids and carry only the
-current generation; the citable version reference is the frozen-data pin, not
-a repo-name suffix.
+**Naming rule:** quants are named for what they are —
+`Qwen3.5-<size>-W4A16-GPTQ` — never for the calibration experiment that
+produced them. (A `-cascade` dir suffix existed historically to mark the
+calib generation; retired 2026-10-16 — historical dirs keep their names,
+nothing new gets one. The citable calib version is the frozen-data pin.)
+Dataset files are named for their purpose (`calib-*`, context pool, regen
+outputs) with sources documented in the table above.
 
 **Models & cache:** Hub ids are the canonical model references (`models.py`
 resolves them); anything pulled from the Hub lands in the standard
@@ -219,9 +230,12 @@ must source/import one of them — no exceptions.
 ```
 models.py            family registry (dims, taps, hub ids) — single source of truth
 quant/               build_calib.py · quantize.py · probe.py
-drafter/             slice_convs.py · regen.py · prep_dataset.py · extract_states.py
-                     bootstrap_draft.py · eval_ladder.sh · train.md · draft_config_*.json
-data/                frozen calib/probe/ladder/conv-ids (the reproducible half of every number)
+drafter/             slice_convs.py · regen.py · regen_pool.sh (standing per-model regen) ·
+                     prep_dataset.py · extract_states.py · reshape_tokens.py · slice_rungs.py ·
+                     data_ladder.sh · sweep_epochs.sh · bootstrap_draft.py · eval_ladder.sh ·
+                     train.md · draft_config_*.json
+data/                frozen calib/probe/ladder/conv-ids + context_pool.jsonl (pinned) +
+                     regen outputs (gitignored, pinned when frozen) — the reproducible half of every number
 patches/             speculators fp8 load-cast patch
 docs/history/        verbatim research notebooks (the full v1→v5 story + postmortems)
 regression.sh        100-row end-to-end pre-flight (<15 min, one GPU)

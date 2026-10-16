@@ -2,7 +2,8 @@
 
 Conventions: weightedKL = blend-weighted mean KL(base‖quant) on the frozen
 probe-v4 ruler (378 rows) via `quant/probe.py`; τ = interval-weighted mean
-acceptance on the 20-prompt held-out ladder (`drafter/eval_ladder.sh`), temp
+acceptance on the 20-prompt held-out ladder (`drafter/eval_ladder.sh`; the
+ladder is general-chat only — every τ here is general-chat τ), temp
 1.0 / top_p 0.95 / top_k 20. **Cross-generation caveat: absolute numbers are
 not comparable between 3.5 and 3.8 releases — keep tables per-model.**
 
@@ -79,10 +80,14 @@ under `runs/` with full event trails (`scripts/tail_run.sh`).
 | epoch 6 @ bf16 base | — | 3.75 | 3.32 |
 | epoch 4 @ bf16 base | 4.15 | — | — |
 | native MTP k=3 | 2.99 | 2.86 | 2.66 |
+| rung 1 (10M, off-policy data) | — | 1.05 (n=4, flat all epochs) | — |
 
-Serving-point sampling (t=0.7 / top_p 0.95 / top_k 20) exactly matches the
-corpus generation config (`regen_quant_all.py`; top_k inherited from the
-model's `generation_config.json`).
+Serving-point sampling is `models.py SERVING_PARAMS` (t=0.7 / top_p 0.95 /
+top_k 20) — the canonical corpus-generation and eval config (stamped into
+every quant's generation_config.json). Historical note: the champion's own
+v1 regen predates this and sent no top_k; rung 1's data additionally
+off-policy (see AGENTS.md corpus section) — its 1.05 is recorded above as
+an artifact, not a dead-zone datapoint.
 
 Conclusions:
 
@@ -126,6 +131,7 @@ code, rag.
 `probe-v4` reproduce the published weightedKL **exactly**: 4b 0.1087, 9b
 0.0889 (dppl 3.35% / 3.23%). The 27b probe OOMs on GB10 (bf16 base + quant
 will not co-reside in 128GB) — its 0.1264 stands as measured at build time;
-re-confirm on a pod when convenient.
+re-confirm on a pod when convenient. (GB10 has 121 GiB UNIFIED memory — see
+AGENTS.md for the vLLM gpu-mem-util rule.)
 
 Full narrative: `docs/history/dflash2_research.md`, `docs/history/calib_v2_plan.md`.

@@ -1,213 +1,101 @@
-# Data-scaling ladder (2026-10-15, in progress)
+# Data-scaling ladder (2026-10-15 →, in progress; corrected 2026-10-16)
 
-**Question:** how little training data does the 4B DFlash2 drafter actually
-need? Measured — not assumed.
+**Question:** how little training data does the DFlash2 drafter actually
+need — measured, not assumed. Current sequencing: the 0.8B testbed pilot
+resolves shape/mix/diversity questions cheaply first; the 4B ladder
+(corpus recovery → valid rung-1 → r130 decision) resumes after.
 
-## Why this experiment exists: the provenance of "260M"
+## Corpus truth (measured 2026-10-16 — supersedes everything earlier here)
 
-The champion corpus (260M tokens, 100k conversations) was never a *measured*
-data requirement. The chain of evidence was:
+`data/context_pool.jsonl` (the "regen_all" file, sha-pinned) is the **regen
+INPUT, not a corpus**: slice_a+slice_b regrouped by conversation — bare
+contexts, every row ends user/tool, **zero responses**. Consequences:
 
-1. **The DFlash paper (arXiv:2602.06036)** trained on **800K samples** and
-   co-adapted its recipe (lr 6e-4 cosine, 6 ep, block 16) at that scale
-   (research doc: "paper recipe... is co-adapted with 800K-sample training
-   sets", "our conservative recipe won at 29M, theirs at 800K samples").
-2. Our 260M rung was sized as the **full yield of a 4TB H200 node**
-   ("144k-row full-yield ~260M tok") — the biggest rung that fit, roughly
-   1/8 of the paper's data volume — extrapolated from the paper's curve,
-   not from our own measurement.
-3. The v3→v4 jump (+0.52 per 9x data) *appeared* to confirm "more is better"
-   but was **confounded**: v3 used 4-tap `[2,16,29,32]`, v4 6-tap
-   `[2,10,17,24,29,32]`, different recipe. Epoch-scaling at fixed 260M was
-   measured (peak in-budget at ep6, serving temp); **data-scaling at fixed
-   recipe never was**.
+- The final assistant turn of every conversation is absent from the file;
+  single-turn rows (51% — ALL math + science, plus 60K chat/IF/agent)
+  carry no supervision and are dropped by prep.
+- The champion trained on the node-side MERGED data (contexts + on-policy
+  finals; pod-side, gone with the pod). Its supervised budget was
+  **~150M+** (incl. ~40M on-policy finals), not the 115–120M estimated
+  from the input file.
+- Ladder-side training (incl. rung 1) used context-internal SOURCE turns
+  only — off-policy, zero finals ever.
+- Mix: file row labels (chat 65 / math 12.5 / science 8 / …) describe the
+  prompt pool. Ladder-side effective supervised mix: chat ~87% / agents
+  ~11% / IF ~2%, math 0, science 0. Code ≈ 6% of context content
+  (measured). Champion-side mix includes regen'd finals (rate unknown,
+  node logs gone).
+- Lengths: mean 2,115 / median 1,676 / p90 4,588 / p99 6,207 tokens,
+  uncapped (paper spec caps at 3072; DSpark reference preps ≤1024).
 
-External reference points (checked 2026-10-15):
+**τ 1.05 (rung 1) is NOT a clean dead-zone number**: trained off-policy,
+scored BELOW the epoch-0 control (3.407) — distribution-mismatch
+signature (taught source-model text, evaluated against quant text);
+volume was confounded with data-kind. The rung-1 *observations* stand
+(extraction parity 20/20; loss 2.90→2.76; recall@16 0.30; flat
+1.04–1.05 across all 6 epochs) — the conclusion doesn't.
 
-| source | data | their framing |
+Recovery: per-model regen is now a standing process
+(`drafter/regen_pool.sh`; SERVING_PARAMS from `models.py`; see
+AGENTS.md). The 0.8B pass is running; the 4B pass (corpus recovery)
+reruns when 4B work resumes — the 4B ladder must re-measure rung 1 on
+regen-fixed data before r130 is decided.
+
+## Currency ledger: one unit for "amount of data"
+
+Canonical: **unique supervised tokens** (loss_mask=1, once per conv);
+conversations as the diversity co-unit (`drafter/data_audit.py`).
+Rung 1 exact: 10,001,156 nominal → 7,498,489 unique (25% prefix dup) →
+**5,190,561 supervised** (1.93× exchange). Never speak in characters.
+
+Reference conversion (their samples → est. supervised tokens): 5K
+speculators example ~1.5–3M (dead); DFlash 100K-sample ablations
+~20–50M (τ 4.9–5.6 greedy); DSpark 100K prompts ≤1024 ~30–60M (τ 3.41);
+DFlare 270K→2.4M ~55M–1B (rising throughout). Unified: dead below ~5M
+supervised (two sources), known-good 20–60M, champion 3.79 at ~150M+.
+
+Orthogonality caveat: at matched supervised volume, short-exchange
+corpora carry ~3–4× more distinct conversations. Volume and diversity
+are separate axes; our shape is volume-heavy/diversity-light — exactly
+what the 0.8B shape arms (prefix/merged/first) measure.
+
+## Why the ladder exists: the provenance of "260M"
+
+The champion corpus was never a measured requirement: the DFlash paper
+trained 800K samples (recipe co-adapted there); our 260M was the full
+yield of a 4TB node (~1/8 paper volume); the v3→v4 "+0.52 per 9×" was
+recipe-confounded (4-tap → 6-tap). Epoch-scaling at 260M was measured
+(peak ep6 at serving temp); data-scaling at fixed recipe never was.
+
+| source | data | framing |
 |---|---|---|
-| DFlash2 paper (arXiv:2602.06036) | 800K samples | quality recipe |
-| NeMo Automodel `qwen3_dflash2.yaml` | no fixed count (placeholder; params = our champion recipe lineage: 6e-4, 6ep, warmup 0.04, block 16, 5 layers) | "PerfectBlend, regenerate first" |
-| vllm-project/speculators example `dflash2_qwen3_8b_ultrachat_online_5k.sh` | **5k samples** (on-policy regen, pretokenized input_ids+loss_mask, seq 8192, 5ep, lr 3e-4) | "with just 5k samples, performance will not be very good... sanity check" |
-| rasyosef/train-dspark-draft-models (DSpark, Llama-3.2) | **100k Open PerfectBlend prompts**, on-policy regen (same doctrine), 3ep, <=1k-tok samples (~100M tok), 8192 packing window | published drafter recipe; no sample-count ablation (80k appears only as a Kaggle free-tier budget) — likely the anchor for our own 100k-conversation corpus size |
+| DFlash2 paper (2602.06036) | 800K samples | quality recipe |
+| NeMo Automodel `qwen3_dflash2.yaml` | placeholder | "PerfectBlend, regenerate first" |
+| speculators `dflash2_qwen3_8b_ultrachat_online_5k.sh` | 5K samples | smoke check, explicitly "not very good" |
+| rasyosef DSpark (Llama-3.2) | 100K PerfectBlend prompts, ≤1k tok | published recipe; unmeasured count (same convention as ours) |
 
-Notable: nobody between the paper (800K) and the smoke example (5k)
-publishes a measured requirement — the ecosystem has a quality pole and a
-smoke pole and nothing in between (the DSpark repo's 100k is the same
-unmeasured convention, matching our champion's conversation count). Our
-ladder brackets exactly that gap (rung 1 = ~their smoke scale, champion =
-1/8 paper scale) with measured tau; rung 1's number is a useful public
-datapoint regardless of where the knee lands.
+Nobody between 800K and 5K publishes a measured requirement. The ladder
+is that instrument; rung results land in `ladder/ladder_results.csv` +
+`RESULTS.md`.
 
-## First measured point (rung 1, 2026-10-15)
-
-**10M tokens (3,257 convs, 6 epochs = 60M effective): tau = 1.05 @ t=0.7,
-n=4 (winner: epoch 2; all six epochs flat 1.04-1.05).**
-
-The drafter is non-viable at this scale — acceptance pinned at chance.
-This is a real data cliff, not a pipeline artifact: extraction parity
-20/20; training converged smoothly (loss 2.90 -> 2.76, recall@16 up
-0.274 -> 0.299); teacher-forced val accept length itself only 1.19 ->
-1.21 with oracle top-16 at ~2.0 (the candidate set barely contains the
-target's tokens); and the same sweep pipeline scored the champion's
-epoch 0 (260M tokens seen) at 3.407 yesterday. The "smoke pole" in the
-table above is therefore literally useless as a drafter, not merely
-suboptimal. The knee lives somewhere in 30-100M; rung 2 (40M) is the
-decisive experiment.
-
-So "we need ~260M tokens" is an assumption inherited from the paper + disk
-geometry. The ladder tests it. If the curve is flat well below 260M, the 9B
-and 27B campaigns shrink accordingly (27B at 40M-equivalent = ~1.2TB states —
-fits any 4TB pod un-trimmed, vs ~8TB at full corpus).
-
-## Design
-
-Three points, fixed champion recipe (armB: lr 6e-4 cosine 6ep, gamma 7,
-6-tap fp8 states, train-ratio 0.950606, sdpa on GB10) — the only variable
-is conversation count:
-
-| rung | tokens | convs/rows | states (fp8) | where | tau @ t=0.7 (n=4) |
-|---|---|---|---|---|---|
-| r10 | 10.0M | 3,257 / 4,729 | 155 GB | GB10 | (running) |
-| r40 | 40M | ~13k / ~19k | 620 GB | GB10 (43h) or B200 pod (~$10-15) — TBD | — |
-| **anchor** | **260M** | 100k / 145,018 | 3.2 TB (pod, gone) | shipped ep6 | **3.79** |
-
-- Rungs are **nested conversation-grouped slices** of the committed
-  regenerated corpus (`regen_all.jsonl`): sorted-conv walk, smaller rungs
-  are prefix-subsets of larger ones (`drafter/slice_rungs.py`).
-- Each rung's number = **best-epoch tau at serving temp** via
-  `sweep_epochs.sh` (t=0.7, pooled n=4) — the same selection procedure that
-  produced the anchor. Never final-epoch or val-loss.
-- One command per rung: `drafter/data_ladder.sh <tokens_millions> [name]`
-  (slice -> prep -> bootstrap v4 init -> extract -> train -> sweep ->
-  states cleanup). GB10 measured: extraction bandwidth-bound ~1-2k tok/s
-  (~50% of peak on both GB10 and H200 — the machine, not the kernels);
-  training ~5s/step at 8192-token batches (~2k tok/s effective).
-
-## Decision rules (scouting pass, not a curve fit)
-
-With tau noise ~+-0.1 at n=4, three points give a categorical read:
-
-- **r10 ~= r40 ~= 3.79** — saturated early: corpus budget for 9B/27B is the
-  smallest rung that overlaps the anchor; storage debate over.
-- **r10 < r40 < 3.79, rising** — add rung(s) between r40 and 260M to locate
-  the knee; 9B/27B budget from the measured slope.
-- **r40 ~= 3.79 but r10 short** — knee in (10M, 40M); probe 20M only if the
-  last terabyte matters for 27B.
-
-Caveats, disclosed: the anchor was *trained* on H200 (rungs on GB10; same
-code/recipe — cross-machine acceptance measured at sigma ~0.01); anchor tau
-was measured on this machine, so comparisons are same-instrument.
-
-## Status
-
-- r10: extracted (4729/4729, parity 20/20), training 6 epochs (~13h GB10;
-  resumed cleanly after a tool-timeout kill — speculators resumes from
-  `epoch<n>_end`). Point expected 2026-10-15.
-- r40: pending r10 (pod-vs-local fork).
-- Results appended to `../llm-compressor/ladder/ladder_results.csv` and
-  published into RESULTS.md when the curve is complete.
-
-## Literature check: is our data prep idiomatic? (2026-10-15)
-
-Verdict across DFlash paper (2602.06036), DFlare (2606.02091), speculators
-docs/CLI, NeMo Automodel recipe, DSpark repo, and SpecForge issue #465:
+## Is our prep idiomatic? (checked 2026-10-15 vs paper/DSpark/DFlare/speculators)
 
 | practice | idiom | ours |
 |---|---|---|
-| on-policy regen by the exact target | universal | yes (quant verifier, t=0.7 = eval temp) |
-| temp/template consistency train<->eval | author-enforced (failures at tau~1.0 otherwise) | yes (champion proves pipeline) |
+| on-policy regen by exact deployed target | universal | yes (quant verifier; SERVING_PARAMS now in models.py) |
+| temp/template consistency train↔eval | author-enforced | yes (champion proves pipeline) |
 | assistant-only loss mask | universal | yes |
-| packing window | 8192 | yes (speculators multipack) |
-| sample shape | ONE conversation per sample; DFlash author's working recipe "used only the first turn" (1.2M samples, 6-layer, 3ep -> tau 6.3) | NO — turn-prefix rows re-supervise early turns (reshape `merged`/`first`/`last` fix this) |
-| length | short single exchanges (~1k); paper extends 4K->32K via 1.6K-sample fine-tune | median 1.7k, p90 4.6k — acceptable, `short` arm tests the idiom |
-| min-trainable-tokens filter | speculators --minimum-valid-tokens | missing (minor; add to prep) |
+| packing window | 8192 | yes |
+| sample shape | ONE conv per sample (DFlash author: first-turn 1.2M → τ 6.3) | NO — turn-prefix rows re-supervise (`reshape_tokens.py` fixes) |
+| length | short (~1k) or capped (3072) | median 1.7k, p90 4.6k uncapped — `--max-tokens` cap added |
+| min-valid-tokens filter | speculators `--minimum-valid-tokens` | missing (pilot prep should add; 0.8B regen shows ~5% loopy tails + 92% math cap-hits worth filtering) |
 
-Data-scale reality from the field:
-- DFlash paper ablations ran at 100K samples (short exchanges) with good
-  results; headline models 800K. Nobody publishes below ~100K samples.
-- DFlare scales 270K -> 2.4M samples (Qwen3-8B): tau rising the whole way,
-  "likely to yield further gains" at the end. Our whole 10M-260M-token
-  ladder sits BELOW their smallest measured point.
-- SpecForge #465: multiple users with official script + official regen data
-  collapsing to tau 1.02-1.05 — our exact rung-1 number. Author's
-  resolutions: 175K samples = "poor" (one failure explained), 1.2M first-
-  turn = tau 6.3, single-sample overfit case = teacher-forcing artifact.
-  No one measured a curve; our ladder is that instrument.
-- Recipe lead (champion-v2, filed with D-PACE/Draft-OPD): DFlare uses
-  progressive gamma (4.5, +1/epoch) vs our fixed 7.
+## Mix doctrine (checked 2026-10-15)
 
-## Currency ledger (2026-10-15): one unit for "amount of data"
-
-Canonical unit: UNIQUE SUPERVISED TOKENS (loss_mask=1, once per
-conversation); conversations as the diversity co-unit. Measured by
-drafter/data_audit.py. Rung 1 exact: 10,001,156 nominal -> 7,498,489
-unique (25% prefix duplication) -> 5,190,561 supervised-unique
-(nominal/supervised exchange 1.93x). Champion estimate (20K-row sample):
-~45% supervised share -> ~115-120M supervised-unique.
-
-Reference conversion (their samples -> estimated supervised tokens):
-5K example ~1.5-3M (dead, matches our rung 1); DFlash 100K-sample
-ablations ~20-50M (tau 4.9-5.6 greedy); DSpark 100K prompts <=1024
-prepared ~30-60M (tau 3.41); DFlare 270K-2.4M ~55M-1B (rising
-throughout). Unified picture: dead below ~5M supervised, known-good
-20-60M, ours 3.79 at ~115-120M.
-
-Orthogonality caveat: at matched supervised volume, short-exchange
-corpora carry ~3-4x more distinct conversations than our long-conv
-corpus. Supervised volume and conversation diversity are separate axes;
-our shape is volume-heavy/diversity-light. The 130M-nominal pod rung
-(~59-68M supervised) lands in the literature's known-good zone — the
-right place to detect a shape deficit at matched volume.
-
-## Mix doctrine in the references (2026-10-15)
-
-Nobody ablates training-data mix — DFlash 5.4.1 "Training Data" is a
-same-data EAGLE-3 comparison, not a mix study. What exists is ecosystem
-convergence: DSpark repo / NeMo recipe / speculators demo / SpecForge all
-use Open-PerfectBlend = math 39% (MetaMath 26 + OrcaMath 13), chat ~30%
-(UltraChat 14 + UltraFeedback 12 + lmsys 4), IF 16% (UltraInteract 19 +
-AutoIF 4), code 7% (evol-codealpaca), dedup'd (-88K). Papers use Nemotron
-PT V2 + CodeAlpaca (+Step-3.5-Flash-SFT in DFlare), general blends with
-explicit code share. Paper spec: max seq 3072 (4096 Coder) — our corpus
-p90 4.6k exceeds it.
-
-Implicit, never-ablated ecosystem belief: structured domains (math/code)
-draft best (benchmarks agree: tau 6.5-7.8 math/code vs 4.4 chat).
-
-Ours vs the default — EFFECTIVE mix (supervised tokens, measured 8K-row
-sample): chat 87.3% / terminal_agent 9.2% / IF 1.9% / conv-agent 1.6% /
-**math 0% / science 0%**. The file's 12.5% math + 8% science rows (30,252)
-are prompt-only (no assistant turn; MMLU-style multi-choice, up to 19.9K
-chars) — dropped by prep, never trained on. Code ≈ 6% of live content
-(comparable to PerfectBlend's 7% source). So vs every reference we are
-math-ZERO, not math-light; regenerating the dead prompts yields short
-pick-a-letter responses (mediocre) — a real math share means pulling
-MetaMath/ORCA-style prompts and regenerating on-policy. Mix remains an
-unmeasured dial anywhere in the field; our pilot can measure it.
-
-## CRITICAL REINTERPRETATION (2026-10-16): regen_all is the INPUT file
-
-regen_all.jsonl = slice_a+slice_b regrouped — the regen INPUT (bare
-contexts; every row ends user/tool; zero on-policy responses; 51% of
-rows single-turn with no supervision). Verified: first 2,000 slice_a
-rows byte-identical in regen_all; rung_r10 rows 4,611 user / 118 tool
-endings, zero assistant. The champion trained on the node-side MERGED
-data (contexts + on-policy finals, /root/dflash_data_v4, now gone);
-every local tool (slice_rungs, data_audit, mix measurements) has been
-operating on the input file.
-
-Consequences:
-1. Rung 1 tau 1.05: trained off-policy (context-internal SOURCE turns
-   only), zero on-policy finals, scored BELOW epoch-0 control (3.407) —
-   distribution-mismatch signature. The "10M dead zone" conflated volume
-   with data-kind; treat as unsound until re-measured on regen-fixed
-   data.
-2. Champion 3.79 stands (trained on real merged data), but supervised
-   budget was ~150M+ (incl. ~40M on-policy finals), not 115-120M.
-3. r130 pod rung would have bought more off-policy contexts — HOLD until
-   corpus is rebuilt.
-
-Fix: re-run regen locally vs 4B quant (~119K finals, overnight GB10) ->
-freeze regen_final.jsonl; re-run rung 1 as the first valid ladder point;
-re-decide r130.
+Nobody ablates mix (DFlash 5.4.1 is a same-data comparison). Ecosystem
+converged on Open-PerfectBlend = math 39% / chat ~30% / IF 16% / code 7%;
+papers use Nemotron PT V2 + CodeAlpaca. Our effective corpus is
+chat-heavy, math-zero (see corpus truth) — a PerfectBlend-shaped arm and
+an agent-heavy arm at matched supervised budget are the pilot's mix dial.
+Real math share needs MetaMath/ORCA-style prompts regenerated on-policy
+(the pool's MMLU-style ghosts regen into short pick-a-letter answers).
