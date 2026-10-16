@@ -6,6 +6,11 @@
 # (drafter must match its target). One pass per model size: 0.8b pilot now,
 # 4b corpus recovery when 4B ladder work resumes, 9b/27b later.
 #
+# Serving: MTP speculative decoding ON by default (MTP_K, default 3) —
+# spec-decode is lossless, so the corpus distribution is identical, only
+# wall-clock improves. MTP+cudagraph capture has wedged on GB10 before:
+# if startup hangs, EXTRA_SERVE_ARGS="--enforce-eager". MTP_K=0 disables.
+#
 # Resumable: regen_out doubles as the resume log (skips done ids); rerun
 # after any interruption. Outputs land next to the pool:
 #   regen_<key>.jsonl        {id, response} resume log (+ .errors.jsonl)
@@ -26,6 +31,7 @@ OUTDIR=$(dirname "$POOL")
 REGEN_OUT=$OUTDIR/regen_${KEY}.jsonl
 MERGED_OUT=$OUTDIR/regen_${KEY}_final.jsonl
 CONC=${REGEN_CONC:-16}
+MTP_K=${MTP_K:-3}   # MTP speculative tokens (0 = off)
 
 run_init "regen_pool_${KEY}"
 LOG=$RUNS_DIR/vllm_regen_${KEY}.log
@@ -41,15 +47,21 @@ log_event QUANT_RESOLVED "key=$KEY quant=$QUANT"
 
 if [[ ! -e $QUANT ]]; then finish_fail "stage=quant-missing quant=$QUANT"; fi
 
+MTP_ARGS=()
+if (( MTP_K > 0 )); then
+  MTP_ARGS=(--speculative-config "{\"method\": \"mtp\", \"num_speculative_tokens\": ${MTP_K}}")
+fi
 launch_server "$LOG" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
   "$VENV/vllm" serve "$QUANT" --port "$PORT" --max-model-len 8192 \
+  "${MTP_ARGS[@]}" \
   ${EXTRA_SERVE_ARGS:-} \
   || finish_fail "stage=server-launch"
 wait_healthy "$PORT" || finish_fail "stage=health"
 
-# regen + merge in one resume-safe step (v1 conventions: t 0.7/top_p 0.95/
-# seed 42/max 640 — matches champion regen exactly)
-run_with_watchdog "$VENV/python" "$ROOT/drafter/regen.py" \
+# regen + merge in one resume-safe step (sampling from models.SERVING_PARAMS;
+# pipeline knobs: seed 42, 640-tok cap — v1 corpus conventions)
+run_with_watchdog "$RUN_DIR/regen.log" \
+  "$VENV/python" "$ROOT/drafter/regen.py" \
   "$POOL" "$REGEN_OUT" "$MERGED_OUT" \
   --model "$KEY" --endpoint "http://localhost:${PORT}/v1/chat/completions" \
   --conc "$CONC" \
