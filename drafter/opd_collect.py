@@ -158,7 +158,19 @@ def main():
     texts = [tok.apply_chat_template(p["messages"], tokenize=False,
                                      add_generation_prompt=True)
              for p in prompts]
-    llm = LLM(model=args.drafter, max_model_len=4096,
+    # pre-filter: prompts must fit max_model_len with the response budget
+    # (pool lengths are uncapped — p99 ≈ 6.2K tokens)
+    max_model_len = 8192
+    enc = tok(texts, add_special_tokens=False)["input_ids"]
+    keep = [i for i, ids in enumerate(enc)
+            if len(ids) + args.max_tokens + 32 <= max_model_len]
+    if len(keep) < len(texts):
+        print(f"[opd_collect] dropped {len(texts) - len(keep)} over-length "
+              f"prompts (> {max_model_len - args.max_tokens - 32} tok)")
+    texts = [texts[i] for i in keep]
+    prompts = [prompts[i] for i in keep]
+
+    llm = LLM(model=args.drafter, max_model_len=max_model_len,
               gpu_memory_utilization=float(__import__("os").environ.get(
                   "GPU_MEM_UTIL", "0.6")), enforce_eager=True)
     sp = SamplingParams(temperature=SERVING_PARAMS["temperature"],

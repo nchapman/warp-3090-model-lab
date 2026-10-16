@@ -41,13 +41,15 @@ def main():
     streams = {}
     prompt_lens = {}
     for of in sorted(d.glob("wave*_outputs.jsonl")):
-        try:
-            for line in open(of):
+        for line in open(of):
+            try:
                 r = json.loads(line)
-                streams[r["id"]] = r["prompt_token_ids"] + r["output_token_ids"]
-                prompt_lens[r["id"]] = len(r["prompt_token_ids"])
-        except json.JSONDecodeError as e:
-            print(f"[opd_build_replay] skip unreadable {of.name}: {e}")
+            except json.JSONDecodeError as e:
+                print(f"[opd_build_replay] skip malformed line in "
+                      f"{of.name}: {e}")
+                continue
+            streams[r["id"]] = r["prompt_token_ids"] + r["output_token_ids"]
+            prompt_lens[r["id"]] = len(r["prompt_token_ids"])
     anchors = []
     try:
         anchors = [json.loads(x) for x in open(d / "anchors.jsonl")]
@@ -121,11 +123,11 @@ def main():
                 "opd_p_topk_tokens": p_tok.tolist(),
                 "opd_p_topk_logprobs": p_lp.tolist(),
             }) + "\n")
-    tmp.replace(out / "replay.jsonl")  # atomic: no truncated replay.jsonl
     if n_rows == 0:
         raise SystemExit("[opd_build_replay] 0 rows built — anchors reference "
                          "missing/overrun streams; nothing written downstream "
                          "is usable")
+    tmp.replace(out / "replay.jsonl")  # atomic: no truncated replay.jsonl
     print(f"[opd_build_replay] {n_rows} anchor rows -> {out}/replay.jsonl "
           f"(accepted {n_acc}, rejected-suffix {n_rej} positions, K={K}, "
           f"skipped {n_skip})")

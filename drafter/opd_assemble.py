@@ -115,6 +115,10 @@ def main():
     with open(tmp, "w") as f:
         for a in all_anchors:
             f.write(json.dumps(a) + "\n")
+    if waves and not all_anchors:
+        raise SystemExit("[opd_assemble] 0 anchors from "
+                         f"{len(waves)} waves — every wave dropped; fix "
+                         "attribution before training on nothing")
     tmp.replace(d / "anchors.jsonl")  # atomic: no truncated anchors.jsonl
 
     accs = [a["accepted_len"] + 1 for a in all_anchors]
