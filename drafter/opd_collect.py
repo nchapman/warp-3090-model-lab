@@ -114,6 +114,10 @@ def main():
         for line in open(root / args.exclude_convs):
             r = json.loads(line)
             excluded.add(r["id"].rsplit("-turn", 1)[0])
+    else:
+        print(f"[opd_collect] WARNING: exclude set {args.exclude_convs} not "
+              f"found — SFT-disjointness NOT guaranteed", file=sys.stderr,
+              flush=True)
     pool, resp = {}, {}
     for line in open(root / args.context_pool):
         r = json.loads(line)

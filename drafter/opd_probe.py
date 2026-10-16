@@ -1,8 +1,11 @@
 """One-shot probe: which sampler path does dflash decode actually take?"""
 import json
+import os
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"  # hook must see the engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 counts = defaultdict(int)

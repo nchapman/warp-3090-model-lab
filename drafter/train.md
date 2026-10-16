@@ -58,6 +58,7 @@ speculators train \
   --speculator-type dflash2 --draft-attn-impl sdpa \
   --from-pretrained draft_init \
   --verifier-name-or-path $QUANT --data-path ds_small \
+  --per-position-loss-weight fixed-exp-decay --dflash-decay-gamma 7 \
   --epochs 3 --lr 1e-4 --checkpoint-freq 1 \
   --train-data-ratio 0.97 --save-path draft_small
 ```

@@ -41,11 +41,18 @@ def main():
     streams = {}
     prompt_lens = {}
     for of in sorted(d.glob("wave*_outputs.jsonl")):
-        for line in open(of):
-            r = json.loads(line)
-            streams[r["id"]] = r["prompt_token_ids"] + r["output_token_ids"]
-            prompt_lens[r["id"]] = len(r["prompt_token_ids"])
-    anchors = [json.loads(x) for x in open(d / "anchors.jsonl")]
+        try:
+            for line in open(of):
+                r = json.loads(line)
+                streams[r["id"]] = r["prompt_token_ids"] + r["output_token_ids"]
+                prompt_lens[r["id"]] = len(r["prompt_token_ids"])
+        except json.JSONDecodeError as e:
+            print(f"[opd_build_replay] skip unreadable {of.name}: {e}")
+    anchors = []
+    try:
+        anchors = [json.loads(x) for x in open(d / "anchors.jsonl")]
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"[opd_build_replay] anchors.jsonl unreadable: {e}")
     if not anchors:
         raise SystemExit("[opd_build_replay] anchors.jsonl is empty — "
                          "collection or assembly upstream produced nothing")

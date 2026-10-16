@@ -110,9 +110,11 @@ def main():
             continue
         all_anchors.extend(res)
 
-    with open(d / "anchors.jsonl", "w") as f:
+    tmp = d / "anchors.jsonl.tmp"
+    with open(tmp, "w") as f:
         for a in all_anchors:
             f.write(json.dumps(a) + "\n")
+    tmp.replace(d / "anchors.jsonl")  # atomic: no truncated anchors.jsonl
 
     accs = [a["accepted_len"] + 1 for a in all_anchors]
     full = sum(1 for a in all_anchors if a["correction_token"] is None)
