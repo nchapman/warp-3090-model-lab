@@ -72,7 +72,8 @@ def assemble_wave(steps, outputs):
                 "block_tokens": block,
                 "accepted_len": acc,
                 "correction_token": chunk[-1] if acc < len(block) else None,
-                "p_top": p_top[lo + 1: lo + 16],
+                "p_top": p_top[lo: lo + 15],  # rows lo+k = target dist
+                # conditioned through draft position k (proposal k's target)
             })
             r["ptr"] += n
             used.add(target)

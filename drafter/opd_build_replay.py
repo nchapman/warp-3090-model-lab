@@ -51,6 +51,9 @@ def main():
     anchors = []
     try:
         anchors = [json.loads(x) for x in open(d / "anchors.jsonl")]
+    except FileNotFoundError:
+        raise SystemExit(f"[opd_build_replay] {d / 'anchors.jsonl'} missing "
+                         "— run opd_assemble first")
     except json.JSONDecodeError as e:
         raise SystemExit(f"[opd_build_replay] anchors.jsonl unreadable: {e}")
     if not anchors:
@@ -119,6 +122,10 @@ def main():
                 "opd_p_topk_logprobs": p_lp.tolist(),
             }) + "\n")
     tmp.replace(out / "replay.jsonl")  # atomic: no truncated replay.jsonl
+    if n_rows == 0:
+        raise SystemExit("[opd_build_replay] 0 rows built — anchors reference "
+                         "missing/overrun streams; nothing written downstream "
+                         "is usable")
     print(f"[opd_build_replay] {n_rows} anchor rows -> {out}/replay.jsonl "
           f"(accepted {n_acc}, rejected-suffix {n_rej} positions, K={K}, "
           f"skipped {n_skip})")

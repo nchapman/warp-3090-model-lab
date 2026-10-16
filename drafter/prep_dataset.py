@@ -127,6 +127,9 @@ def main():
                 if not opd_ok:
                     n_skip += 1
                     continue
+                if args.max_tokens and len(ids) > args.max_tokens:
+                    n_skip += 1
+                    continue  # same drop-cap rule as conversation rows
                 rec = {"input_ids": ids, "loss_mask": mask, "seq_len": len(ids)}
                 for k, v in r.items():
                     if k.startswith("opd_"):

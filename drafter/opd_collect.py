@@ -2,10 +2,10 @@
 drafter and record every verification boundary (draft proposals, acceptance,
 target top-k distribution on the draft-induced prefix).
 
-Method: monkeypatch vllm.v1.sample.rejection_sampler.RejectionSampler.forward
-— the single verify boundary that already receives the draft distributions
-(draft_probs = q), the target logits on draft-proposed prefixes (logits = p),
-and the per-request draft block layout (SpecDecodeMetadata). The patch copies
+Method: hook vllm.v1.worker.gpu.spec_decode.rejection_sampler_utils.
+rejection_sample — the dflash verify boundary receiving the draft
+distributions (draft_logits = q), the target logits on draft-proposed rows
+(target_logits = p), and the per-request block layout. The patch copies
 per-step tensors to CPU records; reconstruction of per-request streams is
 self-checked against llm.generate's returned token ids (mismatches drop the
 request).
