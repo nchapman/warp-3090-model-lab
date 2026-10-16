@@ -120,11 +120,19 @@ def main():
               flush=True)
     pool, resp = {}, {}
     for line in open(root / args.context_pool):
-        r = json.loads(line)
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError as e:
+            print(f"[opd_collect] skip malformed pool line: {e}")
+            continue
         conv = r["id"].rsplit("-turn", 1)[0]
         pool.setdefault(conv, {})[int(r["id"].rsplit("-turn", 1)[1])] = r
     for line in open(root / args.regen_log):
-        r = json.loads(line)
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError as e:
+            print(f"[opd_collect] skip malformed regen line: {e}")
+            continue
         resp[r["id"]] = r["response"]
     prompts = []
     for conv, turns in pool.items():

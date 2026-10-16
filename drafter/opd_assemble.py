@@ -38,6 +38,7 @@ def assemble_wave(steps, outputs):
         p_top = step["p_top"]
         live = [i for i, r in reqs.items() if r["ptr"] < len(r["stream"])]
         used = set()
+        unmatched = 0
         for slot in range(len(cu) - 1):
             if slot >= len(n_sampled):
                 break
@@ -53,6 +54,7 @@ def assemble_wave(steps, outputs):
                     target = i
                     break
             if target is None:
+                unmatched += 1
                 continue
             r = reqs[target]
             n = n_sampled[slot]
@@ -77,6 +79,8 @@ def assemble_wave(steps, outputs):
             })
             r["ptr"] += n
             used.add(target)
+        if unmatched:
+            return None  # a slot attributed to no live request — short wave
     if any(r["ptr"] != len(r["stream"]) for r in reqs.values()):
         # trailing overhang after finish is fine; deficit is not
         if any(r["ptr"] < len(r["stream"]) for r in reqs.values()):
@@ -119,6 +123,8 @@ def main():
         for a in all_anchors:
             f.write(json.dumps(a) + "\n")
     if waves and not all_anchors:
+        anchors_path = d / "anchors.jsonl"
+        anchors_path.unlink(missing_ok=True)  # no stale file for downstream
         raise SystemExit("[opd_assemble] 0 anchors from "
                          f"{len(waves)} waves — every wave dropped; fix "
                          "attribution before training on nothing")

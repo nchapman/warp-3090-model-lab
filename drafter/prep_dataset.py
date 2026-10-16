@@ -110,8 +110,14 @@ def main():
                 # opd_* supervision columns copied verbatim; malformed rows
                 # are skipped loudly-counted, never silently accepted
                 n_pre += 1
-                ids = [int(x) for x in r.get("input_ids", [])]
-                mask = [int(x) for x in r.get("loss_mask", [])]
+                try:
+                    ids = [int(x) for x in r.get("input_ids", [])]
+                    mask = [int(x) for x in r.get("loss_mask", [])]
+                except (TypeError, ValueError) as e:
+                    n_skip += 1
+                    print(f"prep_dataset: skip malformed pre-tokenized "
+                          f"row ({e})")
+                    continue
                 if (not ids or len(mask) != len(ids) or sum(mask) == 0
                         or len(ids) < 16):
                     n_skip += 1
