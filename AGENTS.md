@@ -65,19 +65,26 @@ Nominal row-tokens ≠ unique ≠ supervised: rung 1's "10M" was 7.5M unique
 `drafter/data_audit.py` measures all of these — run it, never guess.
 
 **Corpus** (`../llm-compressor/artifacts/v4_data/regen_all.jsonl`):
-145,018 rows / ~100K convs / 260M nominal ≈ **115–120M supervised**.
-Rows are conversation-turn PREFIXES (`v4-<i>-turnN`); turn-N contains
-turns 1..N (early turns re-supervised, contexts re-extracted).
-- Mix — TWO layers, don't conflate: (a) file rows: chat 65% / math 12.5% /
-  science 8% / IF 5% / conv-agent 5% / terminal-agent 3.6%; (b) **EFFECTIVE
-  trained mix (supervised tokens): chat 87.3% / terminal_agent 9.2% / IF
-  1.9% / conv-agent 1.6% / MATH 0% / SCIENCE 0%** — 30,252 math+science
-  rows (21% of file) are PROMPT-ONLY (no assistant turn; MMLU-style,
-  huge prompts), dropped by prep's sum(mask)>0 filter. Slice budgets
-count only live rows (slice_rungs applies prep filters) — slices were
-  never contaminated. Code ≈ 6% of chat/agent content (measured).
-  Compared to references: PerfectBlend is 39% math — our effective corpus
-  is math-ZERO.
+145,018 rows / ~100K convs / 260M nominal. **THIS FILE IS THE REGEN
+INPUT, NOT A CORPUS** — it is slice_a+slice_b regrouped by conversation:
+bare contexts, every row ends user/tool, ZERO regenerated responses.
+The final assistant turn of every conversation is absent; single-turn
+rows (51% of file — ALL math + science, plus 60K chat/IF/agent) carry no
+supervision at all and are dropped by prep. The true corpus (contexts +
+on-policy finals; what the champion trained on) was pod-side
+/root/dflash_data_v4 and is GONE with the pod — only regen inputs and
+the champion ckpt survive.
+- Mix — the file's row labels (chat 65/math 12.5/science 8/…) describe
+  PROMPT POOL composition, not training data. Ladder-side effective mix
+  (supervised tokens in context turns): chat ~87% / agents ~11%; math 0,
+  science 0 (single-turn → no supervision). Champion-side mix includes
+  regenerated finals (rate unknown, node logs gone). Code ≈ 6% of
+  context content (measured).
+- **τ 1.05 (rung 1) is NOT a clean dead-zone number**: it trained
+  off-policy (source responses only, zero on-policy finals) and scored
+  BELOW the epoch-0 control (3.407) — distribution-mismatch signature,
+  volume confounded with data-kind. Re-measure on regen-fixed corpus
+  before quoting it.
 - Length: mean 2,115 / median 1,676 / p90 4,588 / p99 6,207 tokens —
 **uncapped**; DFlash paper spec caps at 3072. DSpark reference preps ≤1024.
 - Shape tooling: `drafter/reshape_tokens.py` (prefix/merged/first/short),

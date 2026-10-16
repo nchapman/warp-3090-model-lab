@@ -185,3 +185,29 @@ math-ZERO, not math-light; regenerating the dead prompts yields short
 pick-a-letter responses (mediocre) — a real math share means pulling
 MetaMath/ORCA-style prompts and regenerating on-policy. Mix remains an
 unmeasured dial anywhere in the field; our pilot can measure it.
+
+## CRITICAL REINTERPRETATION (2026-10-16): regen_all is the INPUT file
+
+regen_all.jsonl = slice_a+slice_b regrouped — the regen INPUT (bare
+contexts; every row ends user/tool; zero on-policy responses; 51% of
+rows single-turn with no supervision). Verified: first 2,000 slice_a
+rows byte-identical in regen_all; rung_r10 rows 4,611 user / 118 tool
+endings, zero assistant. The champion trained on the node-side MERGED
+data (contexts + on-policy finals, /root/dflash_data_v4, now gone);
+every local tool (slice_rungs, data_audit, mix measurements) has been
+operating on the input file.
+
+Consequences:
+1. Rung 1 tau 1.05: trained off-policy (context-internal SOURCE turns
+   only), zero on-policy finals, scored BELOW epoch-0 control (3.407) —
+   distribution-mismatch signature. The "10M dead zone" conflated volume
+   with data-kind; treat as unsound until re-measured on regen-fixed
+   data.
+2. Champion 3.79 stands (trained on real merged data), but supervised
+   budget was ~150M+ (incl. ~40M on-policy finals), not 115-120M.
+3. r130 pod rung would have bought more off-policy contexts — HOLD until
+   corpus is rebuilt.
+
+Fix: re-run regen locally vs 4B quant (~119K finals, overnight GB10) ->
+freeze regen_final.jsonl; re-run rung 1 as the first valid ladder point;
+re-decide r130.
