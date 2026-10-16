@@ -89,6 +89,9 @@ def main():
     d = Path(sys.argv[1])
     all_anchors = []
     waves = sorted(d.glob("wave*_steps.jsonl"))
+    if not waves:
+        raise SystemExit(f"[opd_assemble] no wave*_steps.jsonl under {d} — "
+                         "run opd_collect first")
     dropped = 0
     for wf in waves:
         of = wf.parent / wf.name.replace("_steps", "_outputs")

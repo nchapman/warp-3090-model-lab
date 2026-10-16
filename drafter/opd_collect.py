@@ -169,6 +169,9 @@ def main():
               f"prompts (> {max_model_len - args.max_tokens - 32} tok)")
     texts = [texts[i] for i in keep]
     prompts = [prompts[i] for i in keep]
+    if not texts:
+        sys.exit("[opd_collect] every prompt exceeded the length prefilter — "
+                 "raise max_model_len or shorten the pool")
 
     llm = LLM(model=args.drafter, max_model_len=max_model_len,
               gpu_memory_utilization=float(__import__("os").environ.get(
