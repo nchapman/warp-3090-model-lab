@@ -106,12 +106,7 @@ SSH "cd $REPO_DIR && SP=\$(.venv-dflash/bin/python -c \
      && echo 'patched modules import ok'"
 
 stage "check"
-SSH "cd $REPO_DIR && .venv-dflash/bin/python -c ' \
-     import torch; cc = torch.cuda.get_device_capability(0) \
-     ; print(\"torch\", torch.__version__, \"cc\", cc) \
-     ; x = torch.randn(4096, 4096, device=\"cuda\", dtype=torch.bfloat16) \
-     ; (x @ x).sum().item(); torch.cuda.synchronize() \
-     ; print(\"matmul ok\")' \
+SSH "cd $REPO_DIR && .venv-dflash/bin/python -c 'import torch; cc = torch.cuda.get_device_capability(0); print(torch.__version__, cc); x = torch.randn(4096, 4096, device=\"cuda\", dtype=torch.bfloat16); (x @ x).sum().item(); torch.cuda.synchronize(); print(\"matmul ok\")' \
      || { echo 'TORCH/GPU CHECK FAILED'; exit 1; }"
 
 stage "models"
