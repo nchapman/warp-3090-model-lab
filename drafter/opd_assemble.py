@@ -54,7 +54,16 @@ def assemble_wave(steps, outputs):
                     target = i
                     break
             if target is None:
-                if live:  # trailing steps after all requests finished are fine
+                # a slot whose echo matches a request that finished in this
+                # very step (final verify block) is a finishing slot — ok.
+                # Unmatched-while-live is the real failure; trailing steps
+                # after all requests finished are fine too.
+                finishing = any(
+                    r["ptr"] >= len(r["stream"])
+                    and r["stream"][r["ptr"] - 1] == echo
+                    for r in reqs.values()
+                )
+                if live and not finishing:
                     unmatched += 1
                 continue
             r = reqs[target]
