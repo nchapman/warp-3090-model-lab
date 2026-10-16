@@ -57,6 +57,11 @@ learned the hard way.
 
 ## Environment
 
+- Fresh pod: `scripts/pod_prep.sh <user@host> [port]` — survey, HF token,
+  guarded rsync (refuses surprise gigabytes), frozen-data manifest check,
+  venv build, speculators patches, GPU check, model pulls. Re-anchor any
+  baseline on the pod itself before comparing numbers across machines.
+
 - Two venvs: `.venv-quant` (torch 2.14.1 / llmcompressor), `.venv-dflash`
   (torch 2.13.0 / speculators 0.8.1 / vllm 0.31.0). `vllm serve` needs the
   venv's bin on PATH.
