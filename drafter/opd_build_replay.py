@@ -124,6 +124,7 @@ def main():
                 "opd_p_topk_logprobs": p_lp.tolist(),
             }) + "\n")
     if n_rows == 0:
+        (out / "replay.jsonl").unlink(missing_ok=True)  # no stale file
         raise SystemExit("[opd_build_replay] 0 rows built — anchors reference "
                          "missing/overrun streams; nothing written downstream "
                          "is usable")

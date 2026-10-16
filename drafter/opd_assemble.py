@@ -30,6 +30,7 @@ def assemble_wave(steps, outputs):
     reqs = {i: {"ptr": 1, "stream": o["output_token_ids"],
                 "id": o["id"], "anchors": []}  # ptr=1: prefill token consumed
            for i, o in enumerate(outputs)}
+    wave_attributed = set()  # every output request must be seen at least once
     for step in steps:
         cu = step["cu_num_logits"]
         drafts = step["draft_sampled"]
@@ -89,8 +90,11 @@ def assemble_wave(steps, outputs):
             })
             r["ptr"] += n
             used.add(target)
+            wave_attributed.add(target)
         if unmatched:
             return None  # a slot attributed to no live request — short wave
+    if len(wave_attributed) < len(outputs):
+        return None  # an output request never attributed — short outputs file
     if any(r["ptr"] != len(r["stream"]) for r in reqs.values()):
         # trailing overhang after finish is fine; deficit is not
         if any(r["ptr"] < len(r["stream"]) for r in reqs.values()):

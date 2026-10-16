@@ -123,11 +123,13 @@ def main():
                     n_skip += 1
                     continue
                 opd_ok = all(
-                    not k.startswith("opd_") or len(v) == len(ids)
+                    isinstance(v, list) and len(v) == len(ids)
                     for k, v in r.items()
-                    if k not in ("opd_p_topk_tokens", "opd_p_topk_logprobs"))
+                    if k.startswith("opd_") and k not in
+                    ("opd_p_topk_tokens", "opd_p_topk_logprobs"))
                 opd_ok = opd_ok and all(
-                    len(v) == len(ids)
+                    isinstance(v, list) and len(v) == len(ids)
+                    and all(isinstance(x, list) for x in v[:1])
                     for k, v in r.items()
                     if k in ("opd_p_topk_tokens", "opd_p_topk_logprobs"))
                 if not opd_ok:

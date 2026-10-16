@@ -112,7 +112,11 @@ def main():
     excluded = set()
     if (root / args.exclude_convs).exists():
         for line in open(root / args.exclude_convs):
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError as e:
+                print(f"[opd_collect] skip malformed exclude line: {e}")
+                continue
             excluded.add(r["id"].rsplit("-turn", 1)[0])
     else:
         print(f"[opd_collect] WARNING: exclude set {args.exclude_convs} not "
