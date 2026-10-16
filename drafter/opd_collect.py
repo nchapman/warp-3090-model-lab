@@ -114,10 +114,11 @@ def main():
         for line in open(root / args.exclude_convs):
             try:
                 r = json.loads(line)
-            except json.JSONDecodeError as e:
+                excluded.add(r["id"].rsplit("-turn", 1)[0])
+            except (json.JSONDecodeError, KeyError, AttributeError,
+                    TypeError) as e:
                 print(f"[opd_collect] skip malformed exclude line: {e}")
                 continue
-            excluded.add(r["id"].rsplit("-turn", 1)[0])
     else:
         print(f"[opd_collect] WARNING: exclude set {args.exclude_convs} not "
               f"found — SFT-disjointness NOT guaranteed", file=sys.stderr,
@@ -145,7 +146,11 @@ def main():
             continue
         if all(f"{conv}-turn{t}" in resp for t in turns):
             last = turns[max(turns)]
-            prompts.append({"id": last["id"], "messages": last["messages"]})
+            try:
+                prompts.append({"id": last["id"], "messages": last["messages"]})
+            except KeyError as e:
+                print(f"[opd_collect] skip conv without messages ({e}): {conv}")
+                continue
         if len(prompts) >= args.n_prompts:
             break
     print(f"[opd_collect] {len(prompts)} disjoint prompts "
@@ -205,6 +210,10 @@ def main():
         wave_prompts = prompts[w0:w0 + args.wave]
         records.clear()
         outs = llm.generate(wave_texts, sp)
+        if len(outs) != len(wave_prompts):
+            sys.exit(f"[opd_collect] wave {w0 // args.wave}: llm returned "
+                     f"{len(outs)}/{len(wave_prompts)} outputs — refusing to "
+                     f"write a truncated outputs file")
         with open(out_dir / f"wave{w0 // args.wave:04d}_steps.jsonl", "w") as f:
             for r in records:
                 f.write(json.dumps(r) + "\n")
