@@ -229,7 +229,16 @@ def main():
 
     model.save_pretrained(save_dir, save_compressed=True)
     processor.save_pretrained(save_dir)
-    print(f"saved to {save_dir}")
+    # stamp canonical serving params into the artifact so `vllm serve` picks
+    # them up as request defaults (models.SERVING_PARAMS = single source)
+    import models as _m
+    gc = {"do_sample": True, **_m.SERVING_PARAMS,
+          "eos_token_id": processor.tokenizer.eos_token_id,
+          "pad_token_id": processor.tokenizer.eos_token_id}
+    import json as _json
+    with open(f"{save_dir}/generation_config.json", "w") as f:
+        json.dump(gc, f, indent=2)
+    print(f"saved to {save_dir} (serving params stamped: {_m.SERVING_PARAMS})")
     from lablog import run_done
     run_done(save_dir=save_dir)
     if info.get("quant_repo"):

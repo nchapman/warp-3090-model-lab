@@ -26,8 +26,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from models import resolve  # noqa: E402
 
-# v1 conventions: temp 0.7 / top_p 0.95 / seed 42, max_tokens 640
-DEFAULTS = {"temperature": 0.7, "top_p": 0.95, "seed": 42, "max_tokens": 640}
+# Sampling params: the lab-canonical SERVING_PARAMS from models.py (t 0.7 /
+# top_p 0.95 / top_k 20 — deployment point + DFlash2 distribution pair;
+# also stamped into every quant's generation_config.json at quant time).
+# Pipeline-only knobs (not distribution): seed for reproducibility, 640-tok
+# response cap (v1 corpus convention).
+from models import SERVING_PARAMS, resolve  # noqa: E402
+DEFAULTS = {**SERVING_PARAMS, "seed": 42, "max_tokens": 640}
 
 
 def regen(rows, out_path, endpoint, conc):

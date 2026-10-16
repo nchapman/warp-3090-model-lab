@@ -9,6 +9,14 @@ across release generations (measured: Qwen3.8-27B shows a higher conv_agent KL
 wall than Qwen3.5-4B despite more scale). Keep results tables per-model.
 """
 
+# Canonical serving params for OUR quants (the lab is the authority, not
+# the Qwen card): deployment point t=0.7 + the DFlash2 convention's
+# distribution pair (top_p 0.95, top_k 20). Written into every quant dir at
+# quant time (generation_config.json) and consumed by regen — one source of
+# truth. Eval scripts keep temp 1.0 for published DFlash2-comparable tau
+# (TEMP env selects; t=0.7 runs are the selection/deployment point).
+SERVING_PARAMS = {"temperature": 0.7, "top_p": 0.95, "top_k": 20}
+
 MODELS = {
     "0.8b": {
         "hub": "Qwen/Qwen3.5-0.8B",
