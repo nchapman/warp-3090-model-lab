@@ -27,7 +27,7 @@ speculators train \
   --from-pretrained draft_init \
   --verifier-name-or-path $QUANT --data-path ds_v4 \
   --epochs 6 --lr 6e-4 --scheduler-type cosine --scheduler-warmup-ratio 0.04 \
-  --dflash-decay-gamma 7 --max-anchors 512 --checkpoint-freq 1 \
+  --per-position-loss-weight fixed-exp-decay --dflash-decay-gamma 7 --max-anchors 512 --checkpoint-freq 1 \
   --train-data-ratio 0.97 --log-freq 10 --save-path draft_v4b
 ```
 
