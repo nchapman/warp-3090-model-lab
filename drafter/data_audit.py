@@ -89,7 +89,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--ds", help="arrow dataset dir (exact, preferred)")
     ap.add_argument("--jsonl", required=True, help="source jsonl (ids; fallback tokenization)")
-    ap.add_argument("--quant", default="../llm-compressor/Qwen3.5-4B-W4A16-GPTQ-cascade")
+    ap.add_argument("--quant", default="nchapman/Qwen3.5-4B-W4A16-GPTQ")
     ap.add_argument("--sample", type=int, default=0, help="jsonl-mode: sample N rows (estimate)")
     ap.add_argument("--label", default=None)
     args = ap.parse_args()

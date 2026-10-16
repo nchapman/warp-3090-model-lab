@@ -13,7 +13,7 @@ template — the same tokenizer path training sees.
 
 Usage:
   python drafter/slice_rungs.py --jsonl regen_all.jsonl --tokens 10000000 \
-      --out rung10m.jsonl --quant ../llm-compressor/Qwen3.5-4B-W4A16-GPTQ-cascade
+      --out rung10m.jsonl --quant nchapman/Qwen3.5-4B-W4A16-GPTQ
 """
 
 import argparse

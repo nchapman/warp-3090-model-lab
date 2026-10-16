@@ -34,7 +34,9 @@ source "$ROOT/lib/runlib.sh"
 KEY=${1:?usage: regen_pool.sh <model-key> [port]}
 PORT=${2:-8138}
 VENV=${VENV:-$ROOT/.venv-dflash/bin}
-POOL=${POOL:-$(cd "$ROOT/.." && pwd)/llm-compressor/artifacts/v4_data/regen_all.jsonl}
+POOL=${POOL:-$ROOT/data/context_pool.jsonl}
+# (frozen v4 context pool — slice_a+b regrouped, subset-labeled; pinned in
+# data/MANIFEST.sha256; historical copy in ../llm-compressor is read-only)
 # outputs live in THIS repo (data/, gitignored, sha-pinned when frozen) —
 # ../llm-compressor is strictly read-only frozen inputs
 OUTDIR=${OUTDIR:-$ROOT/data}

@@ -20,9 +20,9 @@ MILL=${1:?usage: data_ladder.sh <tokens_millions> [name] [port]}
 NAME=${2:-r${MILL}m}
 PORT=${3:-8210}
 VENV=.venv-dflash
-QUANT=${QUANT:-../llm-compressor/Qwen3.5-4B-W4A16-GPTQ-cascade}
-SRC=${SRC:-../llm-compressor/artifacts/v4_data/regen_all.jsonl}
-WORK=${LADDER_WORK:-../llm-compressor/ladder}
+QUANT=${QUANT:-nchapman/Qwen3.5-4B-W4A16-GPTQ}
+SRC=${SRC:-$(dirname "$0")/../data/context_pool.jsonl}
+WORK=${LADDER_WORK:-$ROOT/ladder}  # repo-local; historical rung-1 artifacts in ../llm-compressor/ladder (read-only)
 mkdir -p "$WORK"
 run_init "ladder-$NAME"
 trap 'finish_fail "interrupted"' INT TERM

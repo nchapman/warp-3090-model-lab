@@ -25,3 +25,8 @@ data-raw/
 *.bin
 Qwen3*/
 data/regen_*.jsonl
+ladder/context_pool
+ladder/
+data/context_pool.jsonl
+data/regen_*.jsonl
+ladder/
