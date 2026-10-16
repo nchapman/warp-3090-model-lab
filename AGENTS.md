@@ -124,6 +124,10 @@ desktop session.**
 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24], local quant
 `Qwen3.5-0.8B-W4A16-GPTQ-cascade/`), 9b, 27b (taps UNVALIDATED).
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
+**Calib truth: cascade-v1 = 999×4096 windows, 100%
+nvidia/Nemotron-Cascade-2-SFT-Data (checksum-pinned in data/MANIFEST.sha256;
+build_calib_mix.py's 9-bucket spec does NOT match the frozen file — provenance
+gap, document-before-rebuild). All quants to date share this lineage.**
 
 **Literature idiom (verified from primary sources).** On-policy regen at
 eval temp; one conv per sample (first-turn common); short or capped
