@@ -126,9 +126,10 @@ def main():
             dropped += 1
             print(f"[opd_assemble] DROP {wf.name} (malformed record: {e})")
             continue
-        if res is None:
+        if res is None or not res:
             dropped += 1
-            print(f"[opd_assemble] DROP {wf.name} (attribution mismatch)")
+            print(f"[opd_assemble] DROP {wf.name} "
+                  f"({'attribution mismatch' if res is None else 'no anchors'})")
             continue
         all_anchors.extend(res)
 

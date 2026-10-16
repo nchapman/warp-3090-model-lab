@@ -44,12 +44,13 @@ def main():
         for line in open(of):
             try:
                 r = json.loads(line)
-            except json.JSONDecodeError as e:
+                streams[r["id"]] = (r["prompt_token_ids"]
+                                    + r["output_token_ids"])
+                prompt_lens[r["id"]] = len(r["prompt_token_ids"])
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
                 print(f"[opd_build_replay] skip malformed line in "
                       f"{of.name}: {e}")
                 continue
-            streams[r["id"]] = r["prompt_token_ids"] + r["output_token_ids"]
-            prompt_lens[r["id"]] = len(r["prompt_token_ids"])
     anchors = []
     try:
         anchors = [json.loads(x) for x in open(d / "anchors.jsonl")]
@@ -78,7 +79,10 @@ def main():
             block = a["block_tokens"]
             acc = a["accepted_len"]
             n = len(block)
-            if base + n > len(stream) + 1:  # block overruns the stream
+            # mode-1 reads stream[base..base+acc]; mode-2 never touches the
+            # stream (stored p_top), so a truncated final block is still
+            # buildable — only skip when the accepted positions overrun
+            if base > len(stream) or base + acc >= len(stream):
                 n_skip += 1
                 continue
             tail = stream[base + n] if base + n < len(stream) else block[-1]
