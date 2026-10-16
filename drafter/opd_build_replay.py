@@ -63,7 +63,11 @@ def main():
         raise SystemExit("[opd_build_replay] anchors.jsonl is empty — "
                          "collection or assembly upstream produced nothing")
 
-    K = len(anchors[0]["p_top"][0][0])
+    try:
+        K = len(anchors[0]["p_top"][0][0])
+    except (KeyError, IndexError, TypeError):
+        raise SystemExit("[opd_build_replay] first anchor lacks a parseable "
+                         "p_top row — re-run opd_collect/opd_assemble")
     n_rows = n_acc = n_rej = n_skip = 0
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -129,7 +129,7 @@ def main():
                     ("opd_p_topk_tokens", "opd_p_topk_logprobs"))
                 opd_ok = opd_ok and all(
                     isinstance(v, list) and len(v) == len(ids)
-                    and all(isinstance(x, list) for x in v[:1])
+                    and all(isinstance(x, list) for x in v)
                     for k, v in r.items()
                     if k in ("opd_p_topk_tokens", "opd_p_topk_logprobs"))
                 if not opd_ok:

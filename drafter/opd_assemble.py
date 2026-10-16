@@ -122,7 +122,7 @@ def main():
             continue
         try:
             res = assemble_wave(steps, outputs)
-        except (KeyError, IndexError, ValueError) as e:
+        except (KeyError, IndexError, ValueError, TypeError) as e:
             dropped += 1
             print(f"[opd_assemble] DROP {wf.name} (malformed record: {e})")
             continue
