@@ -123,7 +123,14 @@ def main():
             if args.limit and n >= args.limit:
                 break
     ds = Dataset.from_list(recs)
-    ds.set_format(type="torch", columns=["input_ids", "loss_mask", "seq_len"])
+    # Draft-OPD replay columns must survive the persisted format (a
+    # column-restricted set_format here is why opd_* silently vanished from
+    # trainer getitem — caught in the CPU verification pass)
+    cols = [c for c in ["input_ids", "loss_mask", "seq_len",
+                        "opd_kl_mode", "opd_target_ids", "opd_pos_weight",
+                        "opd_p_topk_tokens", "opd_p_topk_logprobs"]
+            if c in ds.column_names]
+    ds.set_format(type="torch", columns=cols)
     ds.save_to_disk(args.out)
     print(f"prep_dataset: {len(recs)} rows ({n} read) -> {args.out}")
 

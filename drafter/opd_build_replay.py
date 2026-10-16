@@ -89,6 +89,7 @@ def main():
                     for j, (t, lp) in enumerate(pairs):
                         p_tok[pos, j] = t
                         p_lp[pos, j] = lp
+            n_rows += 1
             n_acc += acc + 1
             n_rej += n - acc - 1
             f.write(json.dumps({
