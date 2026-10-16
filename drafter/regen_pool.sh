@@ -6,10 +6,13 @@
 # (drafter must match its target). One pass per model size: 0.8b pilot now,
 # 4b corpus recovery when 4B ladder work resumes, 9b/27b later.
 #
-# Serving: MTP speculative decoding ON by default (MTP_K, default 3) —
-# spec-decode is lossless, so the corpus distribution is identical, only
-# wall-clock improves. MTP+cudagraph capture has wedged on GB10 before:
-# if startup hangs, EXTRA_SERVE_ARGS="--enforce-eager". MTP_K=0 disables.
+# Serving: MTP_K env selects MTP speculative decoding (lossless — corpus
+# distribution identical, wall-clock only). MEASURED 2026-10-16 GB10:
+# MTP is a LATENCY optimization and LOSES at saturation — conc 128 with
+# MTP off: 313 rows/min, 2.38k tok/s, 65s startup vs 249 rows/min, 1.85k
+# tok/s, 116s with MTP_K=3. Data-gen runs saturate, so MTP_K=0 is the
+# DEFAULT; use MTP_K=3 for low-conc interactive serving. MTP+cudagraph
+# capture has wedged on GB10 before: EXTRA_SERVE_ARGS="--enforce-eager".
 # MEMORY: GB10 is UNIFIED (121 GiB shared CPU+GPU) — vLLM's default 0.9
 # gpu-mem-util reserves ~109 GiB and OOM-kills the whole userspace once
 # client load arrives (2026-10-16: pipewire/llama-swap/session died at
@@ -36,7 +39,8 @@ OUTDIR=$(dirname "$POOL")
 REGEN_OUT=$OUTDIR/regen_${KEY}.jsonl
 MERGED_OUT=$OUTDIR/regen_${KEY}_final.jsonl
 CONC=${REGEN_CONC:-16}
-MTP_K=${MTP_K:-3}   # MTP speculative tokens (0 = off)
+MTP_K=${MTP_K:-0}   # MTP speculative tokens; 0 = off (default: data-gen
+                    # saturates the box and MTP loses there — see header)
 GPU_MEM_UTIL=${GPU_MEM_UTIL:-0.6}  # vLLM share of UNIFIED memory
 
 run_init "regen_pool_${KEY}"
