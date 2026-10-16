@@ -35,7 +35,9 @@ KEY=${1:?usage: regen_pool.sh <model-key> [port]}
 PORT=${2:-8138}
 VENV=${VENV:-$ROOT/.venv-dflash/bin}
 POOL=${POOL:-$(cd "$ROOT/.." && pwd)/llm-compressor/artifacts/v4_data/regen_all.jsonl}
-OUTDIR=$(dirname "$POOL")
+# outputs live in THIS repo (data/, gitignored, sha-pinned when frozen) —
+# ../llm-compressor is strictly read-only frozen inputs
+OUTDIR=${OUTDIR:-$ROOT/data}
 REGEN_OUT=$OUTDIR/regen_${KEY}.jsonl
 MERGED_OUT=$OUTDIR/regen_${KEY}_final.jsonl
 CONC=${REGEN_CONC:-16}
