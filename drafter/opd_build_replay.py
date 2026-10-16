@@ -47,7 +47,6 @@ def main():
             prompt_lens[r["id"]] = len(r["prompt_token_ids"])
     anchors = [json.loads(x) for x in open(d / "anchors.jsonl")]
     if not anchors:
-        sys.exit = None  # noqa - keep flake quiet if imported
         raise SystemExit("[opd_build_replay] anchors.jsonl is empty — "
                          "collection or assembly upstream produced nothing")
 
@@ -55,7 +54,8 @@ def main():
     n_rows = n_acc = n_rej = n_skip = 0
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    with open(out / "replay.jsonl", "w") as f:
+    tmp = out / "replay.jsonl.tmp"
+    with open(tmp, "w") as f:
         for a in anchors:
             rid = a["id"]
             if rid not in streams:
@@ -111,6 +111,7 @@ def main():
                 "opd_p_topk_tokens": p_tok.tolist(),
                 "opd_p_topk_logprobs": p_lp.tolist(),
             }) + "\n")
+    tmp.replace(out / "replay.jsonl")  # atomic: no truncated replay.jsonl
     print(f"[opd_build_replay] {n_rows} anchor rows -> {out}/replay.jsonl "
           f"(accepted {n_acc}, rejected-suffix {n_rej} positions, K={K}, "
           f"skipped {n_skip})")

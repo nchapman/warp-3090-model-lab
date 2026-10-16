@@ -133,6 +133,9 @@ def main():
             break
     print(f"[opd_collect] {len(prompts)} disjoint prompts "
           f"(excluded {len(excluded)} SFT convs)")
+    if not prompts:
+        sys.exit("[opd_collect] no usable prompts — pool/regen inputs "
+                 "exhausted or exclude set covers everything")
 
     # ---- run target-assisted decoding with the hook installed, in waves
     # vLLM v1 runs EngineCore in a subprocess — the hook must live in that

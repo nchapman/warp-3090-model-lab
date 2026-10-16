@@ -60,6 +60,7 @@ echo "[3/4] draft bootstrap + 10 train steps + val"
 CUDA_VISIBLE_DEVICES=0 "$VENV/speculators" train --speculator-type dflash2 \
   --draft-attn-impl sdpa --from-pretrained "$OUT/draft_init" \
   --verifier-name-or-path "$QUANT" --data-path "$OUT/states" \
+  --per-position-loss-weight fixed-exp-decay --dflash-decay-gamma 7 \\
   --epochs 1 --lr 1e-4 --max-steps 10 --checkpoint-freq 1 \
   --save-path "$OUT/draft_reg" > "$OUT/train.log" 2>&1
 tr '\r' '\n' < "$OUT/train.log" | grep -a "loss" | tail -3

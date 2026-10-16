@@ -116,6 +116,17 @@ def main():
                         or len(ids) < 16):
                     n_skip += 1
                     continue
+                opd_ok = all(
+                    not k.startswith("opd_") or len(v) == len(ids)
+                    for k, v in r.items()
+                    if k not in ("opd_p_topk_tokens", "opd_p_topk_logprobs"))
+                opd_ok = opd_ok and all(
+                    len(v) == len(ids)
+                    for k, v in r.items()
+                    if k in ("opd_p_topk_tokens", "opd_p_topk_logprobs"))
+                if not opd_ok:
+                    n_skip += 1
+                    continue
                 rec = {"input_ids": ids, "loss_mask": mask, "seq_len": len(ids)}
                 for k, v in r.items():
                     if k.startswith("opd_"):

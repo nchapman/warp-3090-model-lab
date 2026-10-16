@@ -36,7 +36,7 @@ instrument()
 from drafter.opd_collect import install_hook  # noqa: E402
 
 records = []
-install_hook(records)
+install_hook(records, [0])
 
 from models import resolve  # noqa: E402
 from transformers import AutoTokenizer  # noqa: E402
