@@ -115,8 +115,9 @@ at 96% util is normal load, not idle. A hung nvidia-smi can hold
 memory (121 GiB, CPU+GPU shared): vLLM's default 0.9 gpu-mem-util
 reserves ~109 GiB and OOM-kills the whole userspace once client load
 lands (2026-10-16: pipewire/llama-swap/session died mid-run). Always
-serve with an explicit --gpu-memory-utilization ≤ 0.6 (regen_pool.sh
-defaults REGEN_GPU_MEM=0.6) — the box is shared with llama-swap and a
+serve with an explicit --gpu-memory-utilization ≤ 0.6 (all serve sites
+default GPU_MEM_UTIL=0.6; env-overridable — use 0.9 on dedicated pod
+hardware) — the box is shared with llama-swap and a
 desktop session.**
 
 **Models registry.** `models.py` keys: 4b (champion, taps_v4

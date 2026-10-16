@@ -14,7 +14,7 @@
 # gpu-mem-util reserves ~109 GiB and OOM-kills the whole userspace once
 # client load arrives (2026-10-16: pipewire/llama-swap/session died at
 # conc 128). 0.6 leaves the OS ~48 GiB and is still a massive KV cache
-# for the 0.8B; REGEN_GPU_MEM overrides.
+# for the 0.8B; GPU_MEM_UTIL overrides.
 #
 # Resumable: regen_out doubles as the resume log (skips done ids); rerun
 # after any interruption. Outputs land next to the pool:
@@ -37,7 +37,7 @@ REGEN_OUT=$OUTDIR/regen_${KEY}.jsonl
 MERGED_OUT=$OUTDIR/regen_${KEY}_final.jsonl
 CONC=${REGEN_CONC:-16}
 MTP_K=${MTP_K:-3}   # MTP speculative tokens (0 = off)
-REGEN_GPU_MEM=${REGEN_GPU_MEM:-0.6}  # vLLM share of UNIFIED memory
+GPU_MEM_UTIL=${GPU_MEM_UTIL:-0.6}  # vLLM share of UNIFIED memory
 
 run_init "regen_pool_${KEY}"
 LOG=$RUNS_DIR/vllm_regen_${KEY}.log
@@ -59,7 +59,7 @@ if (( MTP_K > 0 )); then
 fi
 launch_server "$LOG" env PATH="$VENV:/usr/local/cuda/bin:$PATH" \
   "$VENV/vllm" serve "$QUANT" --port "$PORT" --max-model-len 8192 \
-  --gpu-memory-utilization "$REGEN_GPU_MEM" \
+  --gpu-memory-utilization "$GPU_MEM_UTIL" \
   "${MTP_ARGS[@]}" \
   ${EXTRA_SERVE_ARGS:-} \
   || finish_fail "stage=server-launch"
