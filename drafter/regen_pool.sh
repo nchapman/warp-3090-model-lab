@@ -58,6 +58,13 @@ from models import resolve
 _, info = resolve('$KEY')
 print(info.get('quant_repo') or '')" | tail -1)
 [[ -n $QUANT && $QUANT != */* ]] && QUANT="$ROOT/$QUANT"
+# hub id: resolve to the local HF cache snapshot (empty/garbage output then
+# falls through to the quant-missing check below — same failure path)
+if [[ $QUANT == */* ]]; then
+  QUANT=$("$VENV/python" -c \
+    "from huggingface_hub import snapshot_download; print(snapshot_download('$QUANT'))" \
+    2>/dev/null | tail -1)
+fi
 log_event QUANT_RESOLVED "key=$KEY quant=$QUANT"
 
 if [[ ! -e $QUANT ]]; then finish_fail "stage=quant-missing quant=$QUANT"; fi
