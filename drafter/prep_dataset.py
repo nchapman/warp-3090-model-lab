@@ -102,6 +102,20 @@ def main():
     with open(args.jsonl) as f:
         for line in f:
             r = json.loads(line)
+            if "input_ids" in r:
+                # pre-tokenized row (Draft-OPD replay): ids/mask as-authored,
+                # opd_* supervision columns copied verbatim
+                rec = {"input_ids": [int(x) for x in r["input_ids"]],
+                       "loss_mask": [int(x) for x in r["loss_mask"]],
+                       "seq_len": len(r["input_ids"])}
+                for k, v in r.items():
+                    if k.startswith("opd_"):
+                        rec[k] = v
+                recs.append(rec)
+                n += 1
+                if args.limit and n >= args.limit:
+                    break
+                continue
             ids, mask = tokenize_with_masks(tok, r["messages"], args.loss_mode)
             if len(ids) >= 16 and sum(mask) > 0:
                 recs.append({"input_ids": ids, "loss_mask": mask, "seq_len": len(ids)})

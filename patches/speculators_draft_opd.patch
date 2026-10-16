@@ -1,0 +1,119 @@
+--- a/speculators/losses/utils.py
++++ b/speculators/losses/utils.py
+@@ -302,3 +302,57 @@
+ 
+     batch_loss = torch.sum(elementwise_loss, dim=1) / denominator  # shape: [1]
+     return batch_loss.mean()  # shape: []
++
++
++def draft_opd_loss(
++    unary_logits: torch.Tensor,
++    kl_mode: torch.Tensor,
++    target_ids: torch.Tensor,
++    pos_weight: torch.Tensor,
++    p_topk_tokens: torch.Tensor,
++    p_topk_logprobs: torch.Tensor,
++    lambda_rej: float | None = None,
++):
++    """Draft-OPD acceptance-aware objective (arXiv:2605.29343).
++
++    Accepted positions (mode 1): forward-KL-equivalent CE toward the
++    target-verified token. Rejected suffix (mode 2): reverse KL(q||p) against
++    the stored target top-k distribution (renormalized; q mass outside the
++    stored top-k is the recorded smoke approximation), weighted by w_k.
++    Returns (scalar loss, metrics dict); (0, {}) when no opd positions.
++    """
++    import os
++
++    if lambda_rej is None:
++        lambda_rej = float(os.environ.get("DRAFT_OPD_LAMBDA_REJ", "1.0"))
++    device = unary_logits.device
++    m1 = (kl_mode == 1)[0]
++    m2 = (kl_mode == 2)[0]
++    if not (m1.any() or m2.any()):
++        return torch.zeros((), device=device, dtype=torch.float32), {}
++    logq = torch.log_softmax(unary_logits.float(), dim=-1)
++    L = unary_logits.shape[1]
++    idx = torch.arange(L, device=device)
++    t = target_ids[0].clamp(min=0).long()
++    ce = -logq[0, idx, t]
++    n_acc = m1.sum().clamp(min=1).float()
++    acc_loss = (ce * m1).sum()
++    rej_loss = torch.zeros((), device=device)
++    n_rej = torch.ones((), device=device)
++    if m2.any():
++        q = logq.exp()
++        valid = p_topk_tokens[0] >= 0
++        tok = p_topk_tokens[0].clamp(min=0).long()
++        p = torch.softmax(p_topk_logprobs[0].float(), dim=-1) * valid
++        p = p / p.sum(-1, keepdim=True).clamp(min=1e-9)
++        logp = torch.where(valid, p.clamp(min=1e-9).log(), torch.zeros_like(p))
++        qk = torch.gather(q[0], 1, tok)
++        logqk = torch.gather(logq[0], 1, tok)
++        kl = (qk * (logqk - logp) * valid).sum(-1)
++        n_rej = (pos_weight[0] * m2).sum().clamp(min=1e-9)
++        rej_loss = (kl * pos_weight[0] * m2).sum() * lambda_rej
++    total = (acc_loss + rej_loss) / (n_acc + lambda_rej * n_rej).clamp(min=1e-9)
++    metrics = {"opd/loss": total.detach(), "opd/acc_ce": (acc_loss / n_acc).detach()}
++    if m2.any():
++        metrics["opd/rej_rkl"] = (rej_loss / (lambda_rej * n_rej)).detach()
++    return total, metrics
+--- a/speculators/models/dflash2/core.py
++++ b/speculators/models/dflash2/core.py
+@@ -174,6 +174,17 @@
+             training_candidate_ids,
+         )
+ 
++        # Draft-OPD replay columns own their positions (arXiv:2605.29343):
++        # the standard loss is masked out there; the opd term is added below.
++        opd_mode = kwargs.get("opd_kl_mode")
++        _m = None
++        if opd_mode is not None:
++            _L = unary_logits.shape[1]
++            _m = opd_mode[:, :_L]
++            aligned_loss_mask = aligned_loss_mask * (_m == 0).to(
++                aligned_loss_mask.dtype
++            )
++
+         loss, metrics = compute_metrics(
+             unary_logits=unary_logits,
+             targets=targets,
+@@ -192,4 +203,17 @@
+             per_position_loss_weight=per_position_loss_weight,
+             dpace_alpha=dpace_alpha,
+         )
++        if opd_mode is not None:
++            from speculators.losses.utils import draft_opd_loss
++
++            opd_loss, opd_metrics = draft_opd_loss(
++                unary_logits,
++                _m,
++                kwargs["opd_target_ids"][:, :_L],
++                kwargs["opd_pos_weight"][:, :_L],
++                kwargs["opd_p_topk_tokens"][:, :_L],
++                kwargs["opd_p_topk_logprobs"][:, :_L],
++            )
++            loss = loss + opd_loss
++            metrics.update(opd_metrics)
+         return None, loss, metrics
+--- a/speculators/train/data.py
++++ b/speculators/train/data.py
+@@ -338,12 +338,17 @@
+             )
+ 
+         hs = loaded_hs["hidden_states"].to(self.hidden_states_dtype)
+-        return {
++        sample = {
+             "hidden_states": hs[:, :-1].flatten(1),
+             "input_ids": loaded_hs["token_ids"],
+             "verifier_last_hidden_states": hs[:, -1],
+             "loss_mask": self.data[index]["loss_mask"],
+         }
++        # Draft-OPD replay columns (patches/speculators_draft_opd.patch)
++        for _k, _v in self.data[index].items():
++            if _k.startswith("opd_") and _k not in sample:
++                sample[_k] = _v
++        return sample
+ 
+ 
+ class CollateFn:
