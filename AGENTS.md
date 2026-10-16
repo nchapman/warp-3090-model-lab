@@ -60,9 +60,12 @@ learned the hard way.
 
 **Data currency.** Always state amounts in **unique supervised tokens**
 (loss_mask=1, once per conv), with conversations as the diversity co-unit.
-Nominal row-tokens ≠ unique ≠ supervised: rung 1's "10M" was 7.5M unique
-(25% prefix duplication) = **5.2M supervised** (1.93× exchange).
-`drafter/data_audit.py` measures all of these — run it, never guess.
+SPEAK TOKENS, NOT CHARACTERS — never report text lengths in chars
+(they read as token counts and mislead; the 2400-char ≈ 640-tok proxy
+confusion is the canonical example). Nominal row-tokens ≠ unique ≠
+supervised: rung 1's "10M" was 7.5M unique (25% prefix dup) = **5.2M
+supervised** (1.93× exchange). `drafter/data_audit.py` measures all of
+these — run it, never guess.
 
 **Corpus** (`../llm-compressor/artifacts/v4_data/regen_all.jsonl`):
 145,018 rows / ~100K convs / 260M nominal. **THIS FILE IS THE REGEN
