@@ -1,13 +1,13 @@
 #!/bin/bash
 # eval_mtp.sh — native-MTP baseline on the same ladder as eval_ladder.sh.
 # Usage: eval_mtp.sh <eval_name> <port> [num_spec_tokens]
-# Serves the verifier (QUANT env, default: published 4b cascade quant) with
+# Serves the verifier (QUANT env, default: published 4B quant) with
 # its native MTP head via --speculative-config, fires the fixed 20-prompt
 # ladder (data/ladder-20.jsonl), computes the INTERVAL-WEIGHTED acceptance —
 # identical protocol to eval_ladder.sh so τ columns are comparable.
 # Standard logging via lib/runlib.sh (run dir + events + watchdogged health).
 # Env: VENV (drafter venv bin, default: repo .venv-dflash/bin)
-#      QUANT (verifier to serve, default: published 4b cascade quant)
+#      QUANT (verifier to serve, default: published 4B quant)
 #      LADDER (prompts jsonl, default: data/ladder-20.jsonl)
 #      EXTRA_SERVE_ARGS (e.g. "--enforce-eager" — MTP + cudagraph capture has
 #        wedged on GB10 before; eager dodges it at some throughput cost)

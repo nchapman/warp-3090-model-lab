@@ -10,7 +10,7 @@
 # Standard logging via lib/runlib.sh: run dir + events.jsonl + watchdogged
 # server health (see README "Run logging standard").
 # Env: VENV (drafter venv bin, default: repo .venv-dflash/bin)
-#      QUANT / QUANT_PATH (verifier, default: published 4b cascade quant)
+#      QUANT / QUANT_PATH (verifier, default: published 4B quant)
 #      VERIFIER_PATH (repoint the config's verifier before serving)
 #      LADDER (prompts jsonl, default: data/ladder-20.jsonl)
 #      EXTRA_SERVE_ARGS (e.g. "--enforce-eager" to dodge cudagraph hangs)

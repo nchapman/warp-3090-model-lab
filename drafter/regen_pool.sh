@@ -46,13 +46,14 @@ GPU_MEM_UTIL=${GPU_MEM_UTIL:-0.6}  # vLLM share of UNIFIED memory
 run_init "regen_pool_${KEY}"
 LOG=$RUNS_DIR/vllm_regen_${KEY}.log
 
-# quant to serve: models.py hub id, else the local-only cascade dir
+# quant to serve: models.py quant_repo (no slash = local dir at repo root,
+# hub ids carry user/); named for the recipe, not the calib experiment
 QUANT=$("$VENV/python" -c "
 import sys; sys.path.insert(0, '$ROOT')
 from models import resolve
 _, info = resolve('$KEY')
-q = info.get('quant_repo')
-print(q if q else '$ROOT/Qwen3.5-0.8B-W4A16-GPTQ-cascade')" | tail -1)
+print(info.get('quant_repo') or '')" | tail -1)
+[[ -n $QUANT && $QUANT != */* ]] && QUANT="$ROOT/$QUANT"
 log_event QUANT_RESOLVED "key=$KEY quant=$QUANT"
 
 if [[ ! -e $QUANT ]]; then finish_fail "stage=quant-missing quant=$QUANT"; fi

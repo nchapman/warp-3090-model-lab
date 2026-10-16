@@ -41,8 +41,14 @@ learned the hard way.
 - One recipe per artifact. No internal run names ("v4b", "armB", epoch
   counts) in public Hub text — the card describes the recipe and the shipped
   checkpoint, nothing else.
-- Hub ids: bare (`Qwen3.5-4B-W4A16-GPTQ`); `-cascade` suffix marks local-only
-  calibration-generation variants; citable version = the frozen-data pin.
+- **Naming rule (2026-10-16):** quants are named for what they ARE —
+  `Qwen3.5-<size>-W4A16-GPTQ` — never for the calib experiment that
+  produced them (the `-cascade` dir suffix is retired; historical dirs
+  keep their names, nothing new gets one). Dataset files are named for
+  their PURPOSE (`calib-*`, regen pool) with the source documented
+  inside (`calib-cascade-v1` = nvidia/Nemotron-Cascade-2-SFT-Data —
+  source-derived name on the dataset is fine). Calib provenance lives
+  in run logs + `data/MANIFEST.sha256`, not quant dir names.
 - Cards carry `model.safetensors` sha256 and full provenance
   (train_command, run.yaml, training_state, val_metrics).
 
@@ -122,7 +128,7 @@ desktop session.**
 
 **Models registry.** `models.py` keys: 4b (champion, taps_v4
 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24], local quant
-`Qwen3.5-0.8B-W4A16-GPTQ-cascade/`), 9b, 27b (taps UNVALIDATED).
+`Qwen3.5-0.8B-W4A16-GPTQ/`), 9b, 27b (taps UNVALIDATED).
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
 **Calib truth: cascade-v1 = 999×4096 windows, 100%
 nvidia/Nemotron-Cascade-2-SFT-Data (checksum-pinned in data/MANIFEST.sha256;

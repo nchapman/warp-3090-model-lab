@@ -202,8 +202,10 @@ def main():
     hub_id, info = resolve(args.model)
     base_name = hub_id.split("/")[-1]
     save_dir = f"{base_name}-W4A16-{args.algo.upper()}"
-    if args.calib.endswith(".jsonl") and "cascade" in Path(args.calib).stem:
-        save_dir += "-cascade"
+    # naming rule: quants are named for WHAT THEY ARE (model + recipe), never
+    # for the calib experiment that produced them — calib provenance lives in
+    # run logs and data/MANIFEST.sha256, not the dir name (retired 2026-10-16:
+    # the old '-cascade' auto-suffix)
     if args.tag:
         save_dir += f"-{args.tag}"
 

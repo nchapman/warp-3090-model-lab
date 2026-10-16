@@ -33,7 +33,9 @@ MODELS = {
         # v4 spread rule mirrored for 24 layers: even interior + final
         "taps_v4": [2, 8, 12, 16, 20, 24],       # 5 aux + final
         "draft_config": "drafter/draft_config_0b8.json",
-        "quant_repo": None,              # local-only testbed model
+        "quant_repo": "Qwen3.5-0.8B-W4A16-GPTQ",  # local dir at repo root
+                                                          # (no slash = local;
+                                                          #  hub ids carry user/)
         "drafter_ladder": None,          # pending: small-model pilot
     },
     "4b": {
