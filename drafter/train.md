@@ -85,3 +85,30 @@ Re-anchored numbers on our ladder: MTP k=1 1.78 / k=2 2.32 / k=3 2.71
   extraction on quant verifiers (vLLM states are corrupt on W4A16).
 - ETA discipline: extrapolate from MEASURED spans of the previous identical unit
   (epoch boundaries), never from first-principles rates.
+
+## Per-position loss weighting: default vs D-PACE (opt-in)
+
+`--per-position-loss-weight` selects the intra-block loss weighting:
+
+- **`fixed-exp-decay` (default, champion lineage)** — static `exp(-pos/γ)`
+  with `--dflash-decay-gamma 7`. This is the documented recipe; our scripts
+  pin it explicitly.
+- **`dpace` (experimental, opt-in)** — D-PACE weights (arXiv:2605.18810):
+  dynamic per-position weights from a differentiable acceptance proxy,
+  `--dpace-alpha 0.5`. Requires `--loss-fn ce`.
+
+**FOOTGUN: the speculators 0.8.1 CLI defaults dflash to `dpace`.** Any
+command that omits the flag silently trains with D-PACE — the documented
+γ=7 static decay has not been what an unpinned command runs since the
+library upgrade (rung 1 trained dpace-weights without anyone choosing it).
+Always pin `--per-position-loss-weight` explicitly; the only 0.8B A/B so far
+(3K convs, dead-zone scale, τ 1.081 vs 1.090 @ t=0.7 n=1) is uninformative —
+the question is open at real scale.
+
+## Draft-OPD post-training (experimental, opt-in)
+
+On-policy distillation from verification boundaries (arXiv:2605.29343) —
+collection → replay dataset → post-train, all scripts under `drafter/opd_*`,
+trainer patch `patches/speculators_draft_opd.patch` (inert without opd_
+columns in the data — the default SFT path is untouched). Full recipe and
+verified semantics: `docs/draft_opd.md`.

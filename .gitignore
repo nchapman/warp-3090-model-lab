@@ -30,3 +30,10 @@ ladder/
 data/context_pool.jsonl
 data/regen_*.jsonl
 ladder/
+
+# drafter smoke/OPD workspaces (disposable, regenerated from banked pool)
+smoke/
+data/smoke*
+data/opd_dryrun/
+data/opd_boundaries/
+data/opd_replay_*/

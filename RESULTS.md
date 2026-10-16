@@ -135,3 +135,34 @@ re-confirm on a pod when convenient. (GB10 has 121 GiB UNIFIED memory — see
 AGENTS.md for the vLLM gpu-mem-util rule.)
 
 Full narrative: `docs/history/dflash2_research.md`, `docs/history/calib_v2_plan.md`.
+
+## 0.8B DFlash2 smoke (2026-10-16, GB10) — flow verified, scale floor mapped
+
+All numbers general-chat τ @ t=0.7, n=1 (smoke-grade: single draws; treat as
+floor-mapping, not selection data). Dataset = banked 0.8B regen finals
+(on-policy, SERVING_PARAMS), same prep/extract/bootstrap throughout.
+
+| supervised tokens (convs) | arm | τ |
+|---|---|---|
+| ~0.7M (320) | dpace-default | 1.024 |
+| ~3.5M (3,000) | static γ7 | 1.081 |
+| ~3.5M (3,000) | dpace α0.5 | 1.090 |
+| — | MTP k=15 control (untrained head) | **2.868** |
+
+- **Dead zone at 0.8B extends to ≥3.5M supervised** — 5× data moved τ +0.06.
+  The 3.5M D-PACE A/B is therefore uninformative for the method (both arms at
+  the acceptance floor; loss shaping cannot express there). 0.7M→1.024 and
+  3.5M→1.08 join the measured anchors.
+- **Library footgun found**: speculators 0.8.1 defaults dflash to
+  `dpace` — the documented γ=7 static recipe was silently overridden in any
+  unpinned command (rung 1 included). All our scripts now pin
+  `--per-position-loss-weight` explicitly (champion lineage = default).
+- **Draft-OPD rig verified end-to-end on real data** (collector hook on the
+  true dflash verify boundary, echo-attributed assembly, replay training
+  through the patched trainer with opd metrics in val logs; standard loss
+  fully masked at opd positions). Boundary instrument cross-check: mean
+  accepted+1 **1.100** vs ladder τ 1.081 same checkpoint. See
+  `docs/draft_opd.md` for semantics + caveats.
+- A 15K-conv A/B (≈17M supervised) was started and then killed: superseded
+  by the full-scale 0.8B round on the Blackwell pod (RTX PRO 6000, same
+  Blackwell family as GB10).

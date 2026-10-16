@@ -1,6 +1,6 @@
 --- a/speculators/losses/utils.py
 +++ b/speculators/losses/utils.py
-@@ -302,3 +302,58 @@
+@@ -302,3 +302,63 @@
  
      batch_loss = torch.sum(elementwise_loss, dim=1) / denominator  # shape: [1]
      return batch_loss.mean()  # shape: []
@@ -38,10 +38,12 @@
 +    idx = torch.arange(L, device=device)
 +    t = target_ids[0].clamp(min=0).long()
 +    ce = -logq[0, idx, t]
-+    n_acc = m1.sum().clamp(min=1).float()
++    # raw position counts; the denominator is clamped once at the end so a
++    # missing mode (full-accept or all-rejected anchors) adds zero weight
++    n_acc = m1.sum().float()
 +    acc_loss = (ce * m1).sum()
 +    rej_loss = torch.zeros((), device=device)
-+    n_rej = torch.ones((), device=device)
++    n_rej = m2.sum().float()
 +    if m2.any():
 +        q = logq.exp()
 +        valid = p_topk_tokens[0] >= 0
@@ -52,16 +54,19 @@
 +        qk = torch.gather(q[0], 1, tok)
 +        logqk = torch.gather(logq[0], 1, tok)
 +        kl = (qk * (logqk - logp) * valid).sum(-1)
-+        n_rej = (pos_weight[0] * m2).sum().clamp(min=1e-9)
++        n_rej = (pos_weight[0] * m2).sum()
 +        rej_loss = (kl * pos_weight[0] * m2).sum() * lambda_rej
 +    total = (acc_loss + rej_loss) / (n_acc + lambda_rej * n_rej).clamp(min=1e-9)
-+    metrics = {"opd/loss": total.detach(), "opd/acc_ce": (acc_loss / n_acc).detach()}
-+    if m2.any():
-+        metrics["opd/rej_rkl"] = (rej_loss / (lambda_rej * n_rej)).detach()
++    metrics = {}
++    if bool(m1.any()):
++        metrics["opd/acc_ce"] = (acc_loss / n_acc.clamp(min=1)).detach()
++    if bool(m2.any()):
++        metrics["opd/rej_rkl"] = (rej_loss / (lambda_rej * n_rej.clamp(min=1e-9))).detach()
++    metrics["opd/loss"] = total.detach()
 +    return total, metrics
 --- a/speculators/models/dflash2/core.py
 +++ b/speculators/models/dflash2/core.py
-@@ -160,6 +160,19 @@
+@@ -160,6 +160,20 @@
          )
          predecessor_ids = self._predecessor_ids(input_ids, block_indices)
  
@@ -69,6 +74,7 @@
 +        # opd_* tensors live on the sequence grid; gather to the anchor grid
 +        # (block_indices) to align with unary_logits. The standard loss is
 +        # masked out there; the opd term is added after compute_metrics.
++        # Inert when no opd_* columns are present (the default path).
 +        opd_mode = kwargs.get("opd_kl_mode")
 +        _m = _bi = None
 +        if opd_mode is not None:
@@ -81,7 +87,7 @@
          target_ids = targets.argmax(dim=-1)
          # shape: [1, num_anchors*block_size]
          candidate_ids = unary_logits.topk(self.candidate_selector.top_k, dim=-1).indices
-@@ -192,4 +205,17 @@
+@@ -192,4 +206,17 @@
              per_position_loss_weight=per_position_loss_weight,
              dpace_alpha=dpace_alpha,
          )

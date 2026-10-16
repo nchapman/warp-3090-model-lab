@@ -41,13 +41,16 @@ def tokenize_with_masks(tok, messages, loss_mode="all"):
     ids: list[int] = []
     mask: list[int] = []
     def render(msgs):
-        # the 0.8B family template rejects query-less conversations (a lone
-        # system message — "No user query found"); the 4B template never
-        # raises, so this fallback is 0.8B-only and lineage-safe: a prefix
-        # with no non-system message yet contributes no ids
+        # the 0.8B family template rejects query-less prefixes (a lone system
+        # message — "No user query found"); the 4B template never raises, so
+        # this fallback is 0.8B-only and lineage-safe: a prefix with no
+        # non-system message yet contributes no ids. Any OTHER template
+        # failure re-raises — silent re-rendering would drift the ids.
         try:
             return tok.apply_chat_template(msgs, tokenize=False)
-        except Exception:
+        except Exception as e:
+            if "No user query" not in str(e):
+                raise
             non_system = [m2 for m2 in msgs if m2["role"] != "system"]
             if not non_system:
                 return ""
@@ -98,16 +101,22 @@ def main():
     quant = args.quant or info.get("quant_repo") or "Qwen/Qwen3.5-4B"
     tok = AutoTokenizer.from_pretrained(quant)
 
-    recs, n = [], 0
+    recs, n, n_pre, n_skip = [], 0, 0, 0
     with open(args.jsonl) as f:
         for line in f:
             r = json.loads(line)
             if "input_ids" in r:
                 # pre-tokenized row (Draft-OPD replay): ids/mask as-authored,
-                # opd_* supervision columns copied verbatim
-                rec = {"input_ids": [int(x) for x in r["input_ids"]],
-                       "loss_mask": [int(x) for x in r["loss_mask"]],
-                       "seq_len": len(r["input_ids"])}
+                # opd_* supervision columns copied verbatim; malformed rows
+                # are skipped loudly-counted, never silently accepted
+                n_pre += 1
+                ids = [int(x) for x in r.get("input_ids", [])]
+                mask = [int(x) for x in r.get("loss_mask", [])]
+                if (not ids or len(mask) != len(ids) or sum(mask) == 0
+                        or len(ids) < 16):
+                    n_skip += 1
+                    continue
+                rec = {"input_ids": ids, "loss_mask": mask, "seq_len": len(ids)}
                 for k, v in r.items():
                     if k.startswith("opd_"):
                         rec[k] = v
@@ -132,7 +141,8 @@ def main():
             if c in ds.column_names]
     ds.set_format(type="torch", columns=cols)
     ds.save_to_disk(args.out)
-    print(f"prep_dataset: {len(recs)} rows ({n} read) -> {args.out}")
+    extra = f", {n_pre} pre-tokenized, {n_skip} skipped" if n_pre else ""
+    print(f"prep_dataset: {len(recs)} rows ({n} read{extra}) -> {args.out}")
 
 
 if __name__ == "__main__":

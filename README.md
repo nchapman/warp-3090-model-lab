@@ -26,6 +26,8 @@ python3 -m venv .venv-dflash  && .venv-dflash/bin/pip install -r requirements-dr
 # + fp8 states (default): after the drafter venv installs, patch speculators in it:
 #   SP=$(./.venv-dflash/bin/python -c 'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
 #     && patch -p1 -d "$SP" < patches/speculators_fp8_load_cast.patch
+# + Draft-OPD post-training (optional, inert without opd_ columns; see docs/draft_opd.md):
+#     patch -p1 -d "$SP" < patches/speculators_draft_opd.patch
 ```
 
 ## Hardware: train on Blackwell, deploy on Ampere

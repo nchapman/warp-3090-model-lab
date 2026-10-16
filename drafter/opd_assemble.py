@@ -91,9 +91,19 @@ def main():
     dropped = 0
     for wf in waves:
         of = wf.parent / wf.name.replace("_steps", "_outputs")
-        steps = [json.loads(x) for x in open(wf)]
-        outputs = [json.loads(x) for x in open(of)]
-        res = assemble_wave(steps, outputs)
+        try:
+            steps = [json.loads(x) for x in open(wf)]
+            outputs = [json.loads(x) for x in open(of)]
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            dropped += 1
+            print(f"[opd_assemble] DROP {wf.name} (unreadable wave: {e})")
+            continue
+        try:
+            res = assemble_wave(steps, outputs)
+        except (KeyError, IndexError, ValueError) as e:
+            dropped += 1
+            print(f"[opd_assemble] DROP {wf.name} (malformed record: {e})")
+            continue
         if res is None:
             dropped += 1
             print(f"[opd_assemble] DROP {wf.name} (attribution mismatch)")
