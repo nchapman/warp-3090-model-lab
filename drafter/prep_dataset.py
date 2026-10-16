@@ -40,10 +40,22 @@ def tokenize_with_masks(tok, messages, loss_mode="all"):
     prev_ids: list[int] = []
     ids: list[int] = []
     mask: list[int] = []
+    def render(msgs):
+        # the 0.8B family template rejects query-less conversations (a lone
+        # system message — "No user query found"); the 4B template never
+        # raises, so this fallback is 0.8B-only and lineage-safe: a prefix
+        # with no non-system message yet contributes no ids
+        try:
+            return tok.apply_chat_template(msgs, tokenize=False)
+        except Exception:
+            non_system = [m2 for m2 in msgs if m2["role"] != "system"]
+            if not non_system:
+                return ""
+            return tok.apply_chat_template(non_system, tokenize=False)
+
     for i, m in enumerate(messages):
-        prev_text = tok.apply_chat_template(messages[:i], tokenize=False) \
-            if i else ""
-        full_text = tok.apply_chat_template(messages[: i + 1], tokenize=False)
+        prev_text = render(messages[:i]) if i else ""
+        full_text = render(messages[: i + 1])
         prev = tok(prev_text, add_special_tokens=False)["input_ids"] if i else []
         full = tok(full_text, add_special_tokens=False)["input_ids"]
         new = full[len(prev):] if len(full) > len(prev) else []
