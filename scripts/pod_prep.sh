@@ -97,9 +97,11 @@ stage "patches"
 PATCHES="patches/speculators_fp8_load_cast.patch patches/speculators_draft_opd.patch"
 SSH "cd $REPO_DIR && SP=\$(.venv-dflash/bin/python -c \
       'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
+     && .venv-dflash/bin/pip install -q --force-reinstall --no-deps speculators==0.8.1 \
+     && find \"\$SP\" -name '*.rej' -o -name '*.orig' | xargs -r rm -f \
      && for p in $PATCHES; do \
-          out=\$(patch -N -p1 -d \"\$SP\" < \"\$p\" 2>&1) || \
-          case \"\$out\" in *'previously applied'*) ;; *) echo \"\$out\"; exit 1;; esac; \
+          patch -p1 -d \"\$SP\" < \"\$p\" >/dev/null \
+          || { echo \"  FAILED \$p\"; exit 1; }; \
           echo \"  \$p ok\"; done \
      && .venv-dflash/bin/python -c 'import speculators.train.data, \
         speculators.models.dflash2.core, speculators.losses.utils' \
