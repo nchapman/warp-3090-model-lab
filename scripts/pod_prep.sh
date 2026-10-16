@@ -92,12 +92,18 @@ SSH "cd $REPO_DIR && { .venv-dflash/bin/python -c 'import torch, speculators, vl
           && echo 'venv built'; }"
 
 stage "patches"
+# ORDER MATTERS: draft_opd's train/data.py hunk is cut against the
+# fp8-patched file — apply fp8_load_cast first, draft_opd second.
+PATCHES="patches/speculators_fp8_load_cast.patch patches/speculators_draft_opd.patch"
 SSH "cd $REPO_DIR && SP=\$(.venv-dflash/bin/python -c \
       'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
-     && for p in patches/*.patch; do \
+     && for p in $PATCHES; do \
           out=\$(patch -N -p1 -d \"\$SP\" < \"\$p\" 2>&1) || \
           case \"\$out\" in *'previously applied'*) ;; *) echo \"\$out\"; exit 1;; esac; \
-          echo \"  \$p ok\"; done"
+          echo \"  \$p ok\"; done \
+     && .venv-dflash/bin/python -c 'import speculators.train.data, \
+        speculators.models.dflash2.core, speculators.losses.utils' \
+     && echo 'patched modules import ok'"
 
 stage "check"
 SSH "cd $REPO_DIR && .venv-dflash/bin/python -c ' \
