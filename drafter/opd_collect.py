@@ -182,6 +182,9 @@ def main():
                         max_tokens=args.max_tokens, seed=args.seed)
 
     out_dir = Path(args.out)
+    if out_dir.exists() and any(out_dir.glob("wave*_*.jsonl")):
+        sys.exit(f"[opd_collect] {out_dir} already holds wave files — stale "
+                 "waves would silently mix runs; move it or pick a fresh --out")
     out_dir.mkdir(parents=True, exist_ok=True)
     n_ok = 0
     for w0 in range(0, len(texts), args.wave):
