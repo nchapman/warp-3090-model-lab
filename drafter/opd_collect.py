@@ -30,41 +30,56 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from models import SERVING_PARAMS  # noqa: E402
+from models import SERVING_PARAMS, resolve  # noqa: E402
 
 TOPK = 64
 
 
 def install_hook(records: list[dict]):
-    from vllm.v1.sample import rejection_sampler as rs
+    """Hook the spec-decode verify boundary.
 
-    orig = rs.RejectionSampler.forward
+    vLLM 0.31's dflash path verifies via
+    vllm.v1.worker.gpu.spec_decode.rejection_sampler_utils.rejection_sample —
+    it receives the draft distributions (draft_logits = q), the target logits
+    on the draft-proposed rows (target_logits = p), the proposed tokens, and
+    direct row->request attribution (expanded_idx_mapping). The
+    v1.sample.RejectionSampler class is NOT in this path (probe-verified).
+    """
+    from vllm.v1.worker.gpu.spec_decode import rejection_sampler_utils as ru
 
-    def hooked(self, metadata, draft_probs, logits, sampling_metadata):
-        out = orig(self, metadata, draft_probs, logits, sampling_metadata)
+    orig = ru.rejection_sample
+
+    def hooked(target_logits, draft_logits, draft_sampled, cu_num_logits, pos,
+               idx_mapping, expanded_idx_mapping, expanded_local_pos,
+               temperature, seed, num_speculative_steps, *args, **kwargs):
+        out = orig(target_logits, draft_logits, draft_sampled, cu_num_logits,
+                   pos, idx_mapping, expanded_idx_mapping, expanded_local_pos,
+                   temperature, seed, num_speculative_steps, *args, **kwargs)
         try:
-            rec = {
-                "draft_token_ids": metadata.draft_token_ids.tolist(),
-                "num_draft_tokens": list(metadata.num_draft_tokens),
-                "cu_num_draft_tokens": metadata.cu_num_draft_tokens.tolist(),
-                "sampled_token_ids": out.sampled_token_ids.tolist(),
-            }
-            if draft_probs is not None:
-                with torch.no_grad():  # q: [num_tokens, vocab]
-                    lq = torch.log_softmax(draft_probs.float(), dim=-1)
-                    v, i = lq.topk(TOPK, dim=-1)
-                    rec["q_top"] = list(zip(i.tolist(), v.tolist()))
-            with torch.no_grad():  # p: target on draft prefixes + bonus rows
-                lp = torch.log_softmax(logits.float(), dim=-1)
-                v, i = lp.topk(TOPK, dim=-1)
-                rec["p_top"] = list(zip(i.tolist(), v.tolist()))
-            records.append(rec)
+            with torch.no_grad():
+                lp = torch.log_softmax(target_logits.float(), dim=-1)
+                pv, pi = lp.topk(TOPK, dim=-1)
+                rec = {
+                    "draft_sampled": draft_sampled.tolist(),
+                    "cu_num_logits": cu_num_logits.tolist(),
+                    "expanded_idx_mapping": expanded_idx_mapping.tolist(),
+                    "expanded_local_pos": expanded_local_pos.tolist(),
+                    "num_speculative_steps": int(num_speculative_steps),
+                    "sampled": out[0].tolist(),
+                    "num_sampled": out[1].tolist(),
+                    "p_top": list(zip(pi.tolist(), pv.tolist())),
+                }
+                if draft_logits is not None:
+                    lq = torch.log_softmax(draft_logits.float(), dim=-1)
+                    qv, qi = lq.topk(TOPK, dim=-1)
+                    rec["q_top"] = list(zip(qi.tolist(), qv.tolist()))
+                records.append(rec)
         except Exception as e:  # never break serving for a logging bug
-            print(f"[opd_collect] hook error: {e}", file=sys.stderr)
+            print(f"[opd_collect] hook error: {e}", file=sys.stderr, flush=True)
         return out
 
-    rs.RejectionSampler.forward = hooked
-    return lambda: setattr(rs.RejectionSampler, "forward", orig)
+    ru.rejection_sample = hooked
+    return lambda: setattr(ru, "rejection_sample", orig)
 
 
 def main():
@@ -78,6 +93,9 @@ def main():
                          "validated per wave and a mismatched wave is dropped")
     ap.add_argument("--exclude-convs", default="data/smoke2_corpus_0.8b.jsonl")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--model", default="0.8b",
+                    help="model key: tokenizer comes from the quant (drafter "
+                         "checkpoint dirs don't ship tokenizer files)")
     args = ap.parse_args()
 
     # ---- prompt pool: complete convs from the banked regen, disjoint from SFT
@@ -110,10 +128,15 @@ def main():
     # ---- run target-assisted decoding with the hook installed, in waves
     records: list[dict] = []
     uninstall = install_hook(records)
+    # vLLM v1 runs EngineCore in a subprocess — the hook must live in that
+    # process, so force single-process mode (documented debug env)
+    import os
+    os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     from vllm import LLM, SamplingParams
     from transformers import AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(args.drafter)
+    tok = AutoTokenizer.from_pretrained(
+        resolve(args.model)[1].get("quant_repo") or "Qwen/Qwen3.5-0.8B")
     texts = [tok.apply_chat_template(p["messages"], tokenize=False,
                                      add_generation_prompt=True)
              for p in prompts]
