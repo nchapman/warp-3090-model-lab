@@ -109,9 +109,17 @@ eval exists. Don't claim deployment relevance without one.
 **Measured anchors (τ @ t=0.7 n=4 unless noted):** 4B 5.2M supervised →
 1.05 flat (UNSOUND — off-policy artifact, see corpus section; do not
 quote as a dead-zone number); 4B ~150M → **3.79**; epoch-0 control 3.407.
-External: DSpark 100K prompts ≤1024 → 3.41; DFlash 100K-sample ablations
-→ 4.9–5.6 greedy. Dead zone < ~5M supervised (two sources); known-good
-20–60M; rising to ~1B (DFlare).
+0.8B: 0.7M → 1.024, 3.5M → 1.08–1.09 (n=1) — dead zone extends to ≥3.5M at
+0.8B; MTP k=15 untrained head = 2.868 on the same ladder (the bar a
+trained 0.8B drafter must beat). External: DSpark 100K prompts ≤1024 →
+3.41; DFlash 100K-sample ablations → 4.9–5.6 greedy. Dead zone < ~5M
+supervised (two sources); known-good 20–60M; rising to ~1B (DFlare).
+
+**Loss-weighting footgun:** speculators 0.8.1 defaults dflash to
+`--per-position-loss-weight dpace` — the documented γ=7 static decay runs
+only when pinned (all our scripts pin it; unpinned commands silently train
+D-PACE weights). Draft-OPD trainer patch is inert without opd_ columns —
+default SFT path unaffected (docs/draft_opd.md).
 
 **Trainer behavior.** Multipack sampler re-shuffles per epoch (seed+epoch)
 → epoch step-counts vary (rung 1: 1,310–1,850+); `step_ms` excludes
