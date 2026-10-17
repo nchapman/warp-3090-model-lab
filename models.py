@@ -120,7 +120,27 @@ MODELS = {
                                              # checkpoint as top-level mtp.* keys
                                              # (dropped by transformers on load;
                                              # llmcompressor re-copies on save)
-        "quant_repo": None,                 # nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ once published
+        "quant_repo": "nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ",  # published 2026-10-17
+        "drafter_ladder": None,
+    },
+    "35b-ornith": {
+        "hub": "ornith-ai/Ornith-1.5-35B-A3B",
+        "generation": "ornith-1.5",         # Qwen3.5-lineage fork — cross-lineage, keep tables separate
+        "arch": "qwen3_5_moe",              # same MoE branch — see model_class()
+        "num_hidden_layers": 40,            # hybrid: full_attention_interval=4 (3:1, like 35b)
+        "hidden_size": 2048,
+        "num_attention_heads": 16,          # full-attn layers only
+        "num_key_value_heads": 2,
+        "head_dim": 256,
+        "num_experts": 256,
+        "num_experts_per_tok": 8,
+        "moe_intermediate_size": 512,
+        "shared_expert_intermediate_size": 512,
+        "vocab_size": 248320,
+        "mask_token_id": 248077,            # family-wide (verify before drafter work)
+        "vision_tower": True,               # image+video input; LLM weights only in quant recipe
+        # no mtp.* keys in the Ornith checkpoint (unlike 35b) — mtp handling no-ops
+        "quant_repo": "nchapman/Ornith-1.5-35B-A3B-W4A16-GPTQ",  # published 2026-10-17
         "drafter_ladder": None,
     },
 }

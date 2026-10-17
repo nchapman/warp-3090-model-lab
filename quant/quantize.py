@@ -21,6 +21,13 @@ from pathlib import Path
 
 import torch
 
+# B200 (2026-10-17, 35B first attempt): cuDNN SDPA allocates per-shape
+# workspace; at >99% HBM the allocation fails inside the calibration forward
+# as CUDNN_STATUS_INTERNAL_ERROR — an OOM wearing a cuDNN costume. The
+# flash/efficient/math backends need no such workspace. Mechanics-only fix;
+# recipe untouched.
+torch.backends.cuda.enable_cudnn_sdp(False)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from models import model_class, resolve  # noqa: E402
 
@@ -196,6 +203,85 @@ def build_recipe(algo, moe=False):
     raise ValueError(f"unknown algo: {algo}")
 
 
+def _base_snapshot_safetensors(hub_id: str):
+    """Base-checkpoint shard paths (hub snapshot dir or a local model dir)."""
+    from huggingface_hub import snapshot_download
+
+    base = Path(hub_id) if Path(hub_id).exists() else Path(
+        snapshot_download(hub_id, local_files_only=True)
+    )
+    return sorted(base.glob("*.safetensors"))
+
+
+def _evict_file_cache(paths) -> int:
+    """posix_fadvise(DONTNEED) each file so the kernel drops its clean pages.
+    Returns total bytes evicted. No root needed; only clean cache is dropped."""
+    import ctypes
+    import os as _os
+
+    POSIX_FADV_DONTNEED = 4
+    libc = ctypes.CDLL(None, use_errno=True)
+    total = 0
+    for p in paths:
+        fd = _os.open(str(p), _os.O_RDONLY)
+        try:
+            libc.posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED)
+            total += _os.fstat(fd).st_size
+        finally:
+            _os.close(fd)
+    return total
+
+
+def _start_cache_reclaimer(gap_gb=4.0, interval_s=5.0):
+    """Daemon that keeps the CUDA caching allocator honest on GB10 unified
+    memory. During transformers-5.x MoE loads, one large transient (~29GB
+    observed on 35B) is allocated and freed but stays RESERVED (non-
+    releasable: outstanding stream refs) — reserved-but-unallocated memory
+    still counts against MemAvailable, so the load dies at ~50% with a
+    perfectly healthy live set. synchronize() + empty_cache() returns
+    inactive blocks to the system (2026-10-17 snapshot probe: reserved
+    65.4GB vs live 36.4GB, single 29.7GB inactive block)."""
+    import threading
+
+    stop = threading.Event()
+    reclaimed = [0.0]
+
+    def loop():
+        while not stop.wait(interval_s):
+            try:
+                gap = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
+                if gap > gap_gb * 2**30:
+                    torch.cuda.synchronize()
+                    before = torch.cuda.memory_reserved()
+                    torch.cuda.empty_cache()
+                    got = (before - torch.cuda.memory_reserved()) / 2**30
+                    reclaimed[0] += got
+                    with open("/proc/self/statm") as f:
+                        rss = int(f.read().split()[1]) * 4096 / 2**30
+                    print(f"[reclaimer] gap {gap / 2**30:.1f}GB -> "
+                          f"released {got:.1f}GB "
+                          f"(reserved {torch.cuda.memory_reserved() / 2**30:.1f}GB "
+                          f"alloc {torch.cuda.memory_allocated() / 2**30:.1f}GB "
+                          f"rss {rss:.1f}GB)", flush=True)
+            except Exception as e:
+                print(f"[reclaimer] error: {e!r}", flush=True)
+
+    threading.Thread(target=loop, daemon=True, name="cuda-cache-reclaimer").start()
+    return stop, reclaimed
+
+
+def _kill_uma_warmup():
+    """No-op transformers' caching_allocator_warmup (modeling_utils.py:4418,
+    defined ~5106). It pre-allocates a full-model-sized buffer (65.4GiB at
+    35B: byte_count//2 as fp16) purely to defragment the CUDA cache, then
+    frees it. On discrete GPUs that's free; on GB10 unified memory the freed
+    block stays cache-reserved as real RAM — every big-model load died at
+    43-55% with exactly this much memory missing (runs 1-7, 2026-10-17).
+    Upstream already skips warmup on MPS/Neuron; same reasoning here."""
+    import transformers.modeling_utils as _mu
+    _mu.caching_allocator_warmup = lambda *a, **k: None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="4b",
@@ -229,6 +315,8 @@ def main():
     model_cls = model_class(hub_id)
     is_moe = model_cls.__name__ == "Qwen3_5MoeForConditionalGeneration"
 
+    reclaim_stop, reclaimed = _start_cache_reclaimer()
+    _kill_uma_warmup()
     if is_moe:
         # MoE: linearize fused experts at LOAD time — this also registers the
         # save-side repack mapping (the post-load fallback inside oneshot does
@@ -241,6 +329,21 @@ def main():
             )
     else:
         model = model_cls.from_pretrained(hub_id, dtype="auto", device_map={"": 0})
+    reclaim_stop.set()
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
+    log_event("CACHE_RECLAIMED", gb=round(reclaimed[0], 1))
+
+    # GB10 unified memory: the just-read base shards (~67GB for 35b) sit in
+    # page cache NEXT TO the resident model copy — ~2x the model footprint
+    # before any workspace, and pressure-driven reclaim has already once
+    # arrived as a global OOM that shot random userspace (2026-10-17).
+    # Weights are copied onto the device (the mappings are closed: RSS is
+    # tiny), so dropping the cache is safe. load happens via mmap -> device
+    # copy; a re-fault would only mean a slow re-read, never corruption.
+    evicted = _evict_file_cache(_base_snapshot_safetensors(hub_id))
+    log_event("PAGE_CACHE_EVICT", files_gb=round(evicted / 2**30, 1))
+
     processor = AutoProcessor.from_pretrained(hub_id)
 
     oneshot_kwargs = dict(

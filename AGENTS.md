@@ -143,6 +143,27 @@ default GPU_MEM_UTIL=0.6; env-overridable — use 0.9 on dedicated pod
 hardware) — the box is shared with llama-swap and a
 desktop session.**
 
+**Unified-memory big-load doctrine (2026-10-17, cost: 3 dead runs + 2
+desktop sessions).** Any >30GB model load on this box needs ALL of:
+- `HF_DEACTIVATE_ASYNC_LOAD=1` — transformers 5.x async load (4 reader
+  threads) piles completed CPU tensors into converter futures → ~2×
+model footprint → OOM at ~45%. Default in quant/run_quant.sh.
+- The mem_guard fence (runlib.sh, `MEM_GUARD_MB`): GPU-side allocations
+  are INVISIBLE to RSS and to the kernel OOM killer's scoring — under
+  pressure it shoots random userspace while the 67GB-holder shows
+  rss=21MB. /proc/meminfo MemAvailable DOES see unified allocations;
+  guard kills OUR pid before the kernel fires. EVERY GPU-touching probe
+  or run gets a floor — no exceptions (an unfenced probe killed the
+  desktop again on 2026-10-17).
+- Page-cache hygiene during load: `scripts/evict_load_cache.py` (loop)
+  + PAGE_CACHE_EVICT (post-load, in quantize.py) — just-read base
+  shards sit in cache NEXT TO the resident copy unless dropped.
+- NEVER load big MoE via baseline transformers `from_pretrained` here:
+its weight_mapping merges ALL experts into ONE ~70GB tensor (watched
+it request 70,214,746,112 bytes with 21.8GB free). The llmcompressor
+`load_quantizable_moe` wrap path linearizes per-layer (~1.6GB
+transients) and never mega-allocs — use it for 35B-class loads.
+
 **Models registry.** `models.py` keys: 4b (champion, taps_v4
 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24], local quant
 `Qwen3.5-0.8B-W4A16-GPTQ/`), 9b, 27b (taps UNVALIDATED).

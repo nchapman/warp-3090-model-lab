@@ -166,3 +166,41 @@ floor-mapping, not selection data). Dataset = banked 0.8B regen finals
 - A 15K-conv A/B (≈17M supervised) was started and then killed: superseded
   by the full-scale 0.8B round on the Blackwell pod (RTX PRO 6000, same
   Blackwell family as GB10).
+
+## 35B dual-quant mission (2026-10-17/18, RunPod B200 se3u5xacjmhp7j)
+
+**Qwen3.6-35B-A3B-W4A16-GPTQ — DONE + SHIPPED.** Oneshot GPTQ (cascade-v1
+999×4096 calib), run `quant-35b-35b.20261017T064500Z` (4h55m, cuDNN-SDPA-off
++ expandable_segments). Verified on pod (pack-quantized GPTQ W4A16 g128;
+vision tower/MTP/shared-expert/linear-attn bf16; smoke gen OK), landed
+locally `quants/Qwen3.6-35B-A3B-W4A16-GPTQ` (21G, 12 files, sha256sum -c OK).
+Card live: nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ (sha256 in card; shards
+3fa42b79…, 1631b73b…, 68b2cabe…). Probe numbers pending (see below).
+
+**Ornith-1.5-35B-A3B-W4A16-GPTQ — IN PROGRESS as of 13:30Z 10-18** (status
+note for wake-up; refreshed from 04:30Z version). Same recipe, run
+`quant-35b-ornith.20261017T114909Z.13535`. RUN healthy but SLOW: Ornith is a
+FLA (gated-delta-rule) model and the pod lacks flash-linear-attention —
+every calib/propagate forward runs the reference fallback kernel (3-4x
+slower than Qwen's), and llmcompressor's sequential pipeline re-forwards
+downstream layers per subgraph (O(n^2)).
+Trajectory: subgraphs 1-14 ~10 min each; 15: 70 min; 16: 2h; 17-20: 7 min
+each; then a MONSTER BAND — 21: 5.5h, 22: 5h, 23: ~9h (calib alone 7.5h).
+23/41 done at 13:24Z, 18 remain. Spend: ~25.6h ~= $450.
+THE DECISION (agent cannot make it alone):
+ (a) LET IT FINISH. If the monster band ends soon (like 15-16 did after two),
+     remaining ~15 fast subgraphs + save ~= 2-4h -> total ~$500-525. If the
+     band runs to 41 at 7-9h/subgraph: ~130h more ~= $2700 total. NOT viable
+     alone; viable only if band breaks within ~3 subgraphs.
+ (b) KILL + KEEP QWEN. $450 sunk, no Ornith quant (oneshot has no partial
+     checkpoint). Stop-loss at current spend.
+ (c) RESTART WITH FLA FAST. `pip install flash-linear-attention` then rerun:
+     forward cost 3-4x lower. Estimated full run ~10-15h (~$175-260) on top
+     of the $450 already spent -> total ~$650-700, RUN_DONE tomorrow morning.
+     Wins if the band would have continued >2 more monsters; wastes $175+
+     if the band was about to break.
+Agent default: (a) UNTIL 2 more consecutive monster subgraphs complete
+(25 and 26 both >3h), then reassess toward (c). Pattern evidence: the only
+other band (15-16) broke after two; current band has run three.
+Lesson for journal: `pip install flash-linear-attention` BEFORE quantizing
+FLA-architecture models on a fresh pod.

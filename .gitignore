@@ -24,6 +24,7 @@ data-raw/
 *.safetensors
 *.bin
 Qwen3*/
+quants/
 data/regen_*.jsonl
 ladder/context_pool
 ladder/

@@ -176,11 +176,39 @@ _runlib_on_exit() {
 # log stops growing (silent stall — process alive, no progress). Epoch-boundary
 # checkpoint/val windows can pause logging for 15-20 min, so the default
 # staleness budget is 30 min (LADDER_STALE_MIN overrides).
+# GB10 unified memory: a job's model memory is invisible to RSS (GPU-side
+# allocations) and therefore to the kernel OOM killer's scoring — under global
+# pressure it shoots random userspace (2026-10-17: pipewire/tailscaled died
+# mid-quant-run while the 67GB-holder showed rss=21MB). /proc/meminfo DOES
+# see unified-memory allocations, so guard on MemAvailable and kill OUR child
+# before the kernel OOM fires. Floor leaves the desktop session alive.
+mem_guard() {  # mem_guard <pid> <floor_mb>
+  local pid=$1 floor=$2 avail
+  while kill -0 "$pid" 2>/dev/null; do
+    avail=$(awk '/^MemAvailable:/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 999999)
+    if (( avail < floor )); then
+      log_event MEMGUARD_KILL "mem_avail_mb=$avail floor_mb=$floor pid=$pid"
+      kill -TERM "$pid" 2>/dev/null || true
+      sleep 10
+      pkill -KILL -P "$pid" 2>/dev/null || true
+      kill -KILL "$pid" 2>/dev/null || true
+      return 1
+    fi
+    sleep 5
+  done
+  return 0
+}
+
 run_with_watchdog() {  # run_with_watchdog <logfile> <cmd...>
   local log=$1; shift
   local max_rounds=$(( ${LADDER_STALE_MIN:-30} / 2 ))
   "$@" >> "$log" 2>&1 &
   local cmd_pid=$!
+  local guard_pid=""
+  if [[ -n ${MEM_GUARD_MB:-} ]]; then
+    mem_guard "$cmd_pid" "$MEM_GUARD_MB" &
+    guard_pid=$!
+  fi
   local last_size=-1 stale_rounds=0
   while kill -0 "$cmd_pid" 2>/dev/null; do
     sleep 120
@@ -202,5 +230,6 @@ run_with_watchdog() {  # run_with_watchdog <logfile> <cmd...>
     fi
     last_size=$size
   done
+  [[ -n "$guard_pid" ]] && kill "$guard_pid" 2>/dev/null || true
   wait "$cmd_pid"
 }
