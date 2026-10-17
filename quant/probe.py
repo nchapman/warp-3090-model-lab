@@ -26,11 +26,11 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from models import resolve  # noqa: E402
+from models import model_class, resolve  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from transformers import AutoProcessor, Qwen3_5ForConditionalGeneration  # noqa: E402
+from transformers import AutoProcessor  # noqa: E402
 
 MAX_LEN = 4096
 KL_ROWS_CAP = 400  # compute KL on all rows up to this many
@@ -47,9 +47,7 @@ AGG_WEIGHTS = {
 
 
 def load_model(path):
-    return Qwen3_5ForConditionalGeneration.from_pretrained(
-        path, dtype="auto", device_map={"": 0}
-    )
+    return model_class(path).from_pretrained(path, dtype="auto", device_map={"": 0})
 
 
 def load_batches(processor, path, limit=None):

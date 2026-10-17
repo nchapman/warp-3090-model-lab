@@ -22,14 +22,15 @@ from pathlib import Path
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from models import resolve  # noqa: E402
+from models import model_class, resolve  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
 from datasets import Dataset, load_dataset  # noqa: E402
-from transformers import AutoProcessor, Qwen3_5ForConditionalGeneration  # noqa: E402
+from transformers import AutoProcessor  # noqa: E402
 
 from llmcompressor import oneshot  # noqa: E402
+from llmcompressor.modeling.moe.linearize import load_quantizable_moe  # noqa: E402
 from llmcompressor.modifiers.autoround import AutoRoundModifier  # noqa: E402
 from llmcompressor.modifiers.gptq import GPTQModifier  # noqa: E402
 from llmcompressor.modifiers.quantization import QuantizationModifier  # noqa: E402
@@ -142,9 +143,24 @@ def get_calibration_dataset(processor, calib, num_samples, max_seq_length):
     return ds
 
 
-def build_recipe(algo):
+def build_recipe(algo, moe=False):
     # vision tower and lm_head stay BF16
     ignore = ["lm_head", "re:.*visual.*"]
+    # MoE-family (qwen3_5_moe) additions — verified empirically against
+    # llmcompressor 0.14.1a (mini e2e): the router needs NO ignore entry
+    # (Qwen3_5MoeTopKRouter is a raw nn.Parameter, never matched by
+    # targets="Linear"; llmcompressor still materializes it into the
+    # artifact's explicit ignore list automatically). Kept at BF16:
+    # shared expert + its [1,2048] gate (always-active dense path; Intel
+    # AutoRound MoE recipe + palmfuture GPTQ precedent, ~180MB) and GDN
+    # in_proj_a/b ([32,2048]; vLLM fuses a+b into in_proj_ba — sub-kernel
+    # width; the library duo recipe ignores the same two).
+    moe_ignore = [
+        "re:.*shared_expert.*",
+        "re:.*linear_attn.in_proj_a$",
+        "re:.*linear_attn.in_proj_b$",
+    ]
+    ignore = ignore + (moe_ignore if moe else [])
     if algo == "gptq":
         return GPTQModifier(targets="Linear", scheme="W4A16", ignore=ignore)
     if algo == "duo":
@@ -163,7 +179,8 @@ def build_recipe(algo):
         ]
         return [
             AWQModifier(duo_scaling="both", offload_device=torch.device("cpu")),
-            GPTQModifier(targets="Linear", scheme="W4A16", ignore=ignore),
+            GPTQModifier(targets="Linear", scheme="W4A16",
+                         ignore=ignore + (moe_ignore if moe else [])),
         ]
     if algo == "awq":
         # AWQModifier scales salient channels; QuantizationModifier quantizes
@@ -182,8 +199,8 @@ def build_recipe(algo):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="4b",
-                        help="model key from models.py (4b|9b|27b) or a full "
-                             "hub id / local path")
+                        help="model key from models.py (0.8b|4b|9b|27b|35b) or "
+                             "a full hub id / local path")
     parser.add_argument("--algo", choices=["gptq", "duo", "awq", "autoround"],
                         default="gptq")
     parser.add_argument("--calib", default="data/calib-cascade-v1.jsonl",
@@ -209,9 +226,21 @@ def main():
     if args.tag:
         save_dir += f"-{args.tag}"
 
-    model = Qwen3_5ForConditionalGeneration.from_pretrained(
-        hub_id, dtype="auto", device_map={"": 0}
-    )
+    model_cls = model_class(hub_id)
+    is_moe = model_cls.__name__ == "Qwen3_5MoeForConditionalGeneration"
+
+    if is_moe:
+        # MoE: linearize fused experts at LOAD time — this also registers the
+        # save-side repack mapping (the post-load fallback inside oneshot does
+        # not). oneshot then routes calibration through all experts by default
+        # (moe_calibrate_all_experts=True) and re-copies mtp.* tensors from the
+        # base checkpoint on save.
+        with load_quantizable_moe(model_cls):
+            model = model_cls.from_pretrained(
+                hub_id, dtype="auto", device_map={"": 0}
+            )
+    else:
+        model = model_cls.from_pretrained(hub_id, dtype="auto", device_map={"": 0})
     processor = AutoProcessor.from_pretrained(hub_id)
 
     oneshot_kwargs = dict(
@@ -219,7 +248,7 @@ def main():
         dataset=get_calibration_dataset(
             processor, args.calib, args.num_samples, args.max_seq_length
         ),
-        recipe=build_recipe(args.algo),
+        recipe=build_recipe(args.algo, moe=is_moe),
         max_seq_length=args.max_seq_length,
         num_calibration_samples=args.num_samples,
     )
@@ -241,6 +270,47 @@ def main():
     with open(f"{save_dir}/generation_config.json", "w") as f:
         json.dump(gc, f, indent=2)
     print(f"saved to {save_dir} (serving params stamped: {_m.SERVING_PARAMS})")
+
+    if is_moe:
+        # MTP audit: transformers drops mtp.* on load; llmcompressor's
+        # save_mtp_tensors_to_checkpoint re-copies them from the base. Verify
+        # the artifact actually carries them (spec-decode baselines need it).
+        from huggingface_hub import snapshot_download
+        from safetensors import safe_open
+
+        def mtp_keys(path):
+            p = Path(path)
+            idx = p / "model.safetensors.index.json"
+            shards = (
+                {(p / s).resolve() for s in json.loads(idx.read_text())["weight_map"].values()}
+                if idx.exists()
+                else sorted(p.glob("*.safetensors"))
+            )
+            keys = set()
+            for s in shards:
+                with safe_open(s, framework="pt") as f:
+                    keys.update(k for k in f.keys() if k.startswith("mtp."))
+            return keys
+
+        base_path = hub_id if Path(hub_id).exists() else snapshot_download(hub_id)
+        base_keys = mtp_keys(base_path)
+        saved_keys = mtp_keys(save_dir)
+        missing = base_keys - saved_keys
+        log_event("MTP_AUDIT", base=len(base_keys), saved=len(saved_keys),
+                  missing=len(missing))
+        # registry says this model has MTP → the copy MUST have happened;
+        # unknown provenance (raw hub id/path) → require at least parity
+        # with whatever the base carries
+        required = bool(info.get("mtp_num_hidden_layers"))
+        if (required and (not base_keys or saved_keys != base_keys)) or (
+            not required and missing
+        ):
+            raise RuntimeError(
+                f"MTP tensors wrong in artifact (base {len(base_keys)}, saved "
+                f"{len(saved_keys)}, missing {len(missing)}); spec-decode "
+                f"baselines would break")
+        print(f"MTP audit: {len(saved_keys)}/{len(base_keys)} mtp.* tensors copied")
+
     from lablog import run_done
     run_done(save_dir=save_dir)
     if info.get("quant_repo"):

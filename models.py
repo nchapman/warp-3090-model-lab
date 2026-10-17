@@ -1,8 +1,9 @@
 """Qwen 3.5 release family registry — the single source of truth for scripts.
 
-All checkpoints across the 3.5 / 3.6-upgrade / 3.8-only releases share the same
-architecture class (model_type qwen3_5, Qwen3_5ForConditionalGeneration), so one
-code path covers the family; per-model facts live here.
+Dense checkpoints (model_type qwen3_5, Qwen3_5ForConditionalGeneration) share
+one code path; the 3.6 MoE branch (model_type qwen3_5_moe,
+Qwen3_5MoeForConditionalGeneration) is resolved per model via model_class().
+Per-model facts live here.
 
 Cross-generation caveat: absolute KL / acceptance numbers are NOT comparable
 across release generations (measured: Qwen3.8-27B shows a higher conv_agent KL
@@ -98,7 +99,54 @@ MODELS = {
         "quant_weightedkl": 0.1264,   # cross-gen: not comparable to 3.5 numbers
         "drafter_ladder": None,       # NO-GO decision (budget); premium ref 2.959
     },
+    "35b": {
+        "hub": "Qwen/Qwen3.6-35B-A3B",
+        "generation": "3.6",
+        "arch": "qwen3_5_moe",              # MoE branch — see model_class()
+        "num_hidden_layers": 40,            # hybrid: 30 GatedDeltaNet + 10 full attn (3:1)
+        "hidden_size": 2048,
+        "num_attention_heads": 16,          # full-attn layers only
+        "num_key_value_heads": 2,
+        "head_dim": 256,
+        "num_experts": 256,
+        "num_experts_per_tok": 8,
+        "moe_intermediate_size": 512,
+        "shared_expert_intermediate_size": 512,
+        "vocab_size": 248320,
+        "mask_token_id": 248077,
+        # no taps_v*/draft_config: drafter tooling for 35b is untested; add
+        # taps here before any drafter work
+        "mtp_num_hidden_layers": 1,         # MTP trained; weights live in the
+                                             # checkpoint as top-level mtp.* keys
+                                             # (dropped by transformers on load;
+                                             # llmcompressor re-copies on save)
+        "quant_repo": None,                 # nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ once published
+        "drafter_ladder": None,
+    },
 }
+
+
+def model_class(hub_id):
+    """Resolve the transformers model class for a hub id / local path.
+
+    The family spans dense (qwen3_5) and MoE (qwen3_5_moe) architectures;
+    scripts must not hardcode one class. Lazy imports keep this module
+    import-safe for bash tooling.
+    """
+    from transformers import AutoConfig
+
+    model_type = AutoConfig.from_pretrained(hub_id).model_type
+    if model_type == "qwen3_5_moe":
+        from transformers.models.qwen3_5_moe import (
+            Qwen3_5MoeForConditionalGeneration,
+        )
+
+        return Qwen3_5MoeForConditionalGeneration
+    if model_type == "qwen3_5":
+        from transformers import Qwen3_5ForConditionalGeneration
+
+        return Qwen3_5ForConditionalGeneration
+    raise ValueError(f"unsupported model_type {model_type!r} for {hub_id}")
 
 
 def get(key):
