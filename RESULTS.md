@@ -32,7 +32,9 @@ weightedKL is mid-range domains + weaker base geometry (base NLL 2.38 vs
 1.39). Guard-set dPPL unmeasured (pod terminated; >90GB doesn't fit GB10).
 
 Calibration ablations (4B, probe-v4): cyankiwi 0.1340 · ncblend 0.1273 ·
-cascade-v1 **0.1087** · cascade-v2 0.1120 · duo AWQ+GPTQ @512×384 0.1209
+cascade-v1 **0.1087** · cascade-v2 0.1120 · cascade-v3 0.1123 (recovered
+2026-10-17 from cascade_v3_4b.log; both deliberate agentic re-mixes lost to
+the untouched card-proportional mix) · duo AWQ+GPTQ @512×384 0.1209
 (loses — agentic domains starved at 384 tokens). GPTQ beats the library-default
 512×384 budget at 999×4096 everywhere it was measured.
 

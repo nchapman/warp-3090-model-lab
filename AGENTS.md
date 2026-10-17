@@ -172,10 +172,17 @@ transients) and never mega-allocs — use it for 35B-class loads.
 the unsuffixed dir there is an ablation-era leftover that ablations overwrote
 in place — never probe it as the champion.
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
-**Calib truth: cascade-v1 = 999×4096 windows, 100%
-nvidia/Nemotron-Cascade-2-SFT-Data (checksum-pinned in data/MANIFEST.sha256;
-build_calib_mix.py's 9-bucket spec does NOT match the frozen file — provenance
-gap, document-before-rebuild). All quants to date share this lineage.**
+**Calib truth: cascade-v1 = 999 rows (truncated 4096 tok), 100%
+nvidia/Nemotron-Cascade-2-SFT-Data, stratified to the dataset's own card
+proportions — safety dropped (0.02%), chat 58.7 / math 18.5 / science 11.4 /
+IF 5.2 / conv_agent 3.5 / terminal 2.0 / swe 0.6 (verified against the frozen
+file to the row, 2026-10-17). Builder = `build_cascade_slices.py` in
+~/Code/llm-compressor (build_calib_mix.py is the earlier ncblend 9-bucket
+builder — different artifact; that conflation caused the old "provenance gap"
+note). Fully rebuildable: 9.4G parquet shards (data/cascade/, first/mid/last
+per subset) + script + seed 0 on disk; frozen sha in data/MANIFEST.sha256.
+Deliberate remixes all lost to the card mix: v2 agentic×3 0.1120, v3
+agentic×1.5+ML 0.1123, perfectblend 0.1432. All quants share this lineage.**
 
 **Regen doctrine (the standing per-model process).** Contexts are the
 shared invariant; every target model regenerates finals ON-POLICY with its
