@@ -39,9 +39,13 @@ for ep in 0 1 2 3 4 5; do
 done
 ```
 
-Why: the champion is **epoch 2** (τ 3.443); acceptance DECLINES after ep2 while
-val loss still improves. Val loss is an unreliable checkpoint selector at high
-LR — select by ladder, never by val loss or finality. (`checkpoint-freq 1` is
+Why: the shipped champion is **epoch 6**, selected at the serving point
+(ep6 3.79 vs ep4 3.68 @ t=0.7, 2.3σ at n=4 each; ep2's 3.443 was the
+superseded pod-era t=1.0 pick). Acceptance at t=0.7 rose monotonically
+through ep6 while **greedy inverts the ranking** (ep4 peaks, 4.20 vs 4.05) —
+temperature-dependent ranking is exactly why selection is t=0.7 n≥4, never
+greedy. Val loss is also an unreliable selector at high LR (improves while
+τ moves either way) — select by ladder, never by val loss or finality. (`checkpoint-freq 1` is
 asserted by convention: with freq=2 an odd-epoch run never saves its final epoch.)
 
 - armA variant (serve-down-robust): `--epochs 3 --lr 1e-4` (constant), same
