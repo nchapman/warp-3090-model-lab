@@ -124,7 +124,8 @@ is temperature-dependent (greedy peaks mid-run); never rank on single draws
 ## Data (frozen, in git under `data/`)
 
 Frozen **deliberately**: every published number is measured on these exact
-files (weightedKL on probe-v4, τ on ladder-20), so drifting them silently
+files (weightedKL on probe-v4, rollout agreement on traj-v1, τ on ladder-20),
+so drifting them silently
 breaks cross-run comparability. Verify your checkout:
 
 ```bash
@@ -136,6 +137,8 @@ breaks cross-run comparability. Verify your checkout:
 | `calib-cascade-v1.jsonl` | champion calibration set (999 rows) | 100% nvidia/Nemotron-Cascade-2-SFT-Data, dataset-native proportions (verified 2026-10-16) |
 | `probe-v4.jsonl` | frozen 378-row fidelity ruler (the weightedKL metric) | cascade pool per V4_TARGETS + Belebele 10×9 langs |
 | `probe-guard.jsonl` | OOD guard (no_robots 40 + Belebele 4×9 langs) | no_robots **train** split (verified vs cached upstream arrows) + facebook/belebele |
+| `traj-v1.jsonl` | frozen 301-row rollout-agreement ruler (greedy 32-token trajectory match vs base — the compounding regime teacher-forced KL can't see) | cascade pool per TRAJ_TARGETS (agentic 100: terminal 50/swe 25/conv_agent 25; math 60, IF 25, chat 40, chat_long 40 @ 12–24K chars, Belebele 4×9 fresh rows) |
+| `traj-v1.jsonl.sources.json` | provenance sidecar for traj-v1 (19 upstream shard hashes) | written by the build that froze it |
 | `ladder-20.jsonl` | the 20 held-out eval prompts (the τ metric) | rows 50–69 of the v1-era 100-row cascade dev set (`dflash_data_v1`), frozen since the first DFlash2 run; hash-banned from drafter training, disjoint from the probes. Prompt texts recur inside calib rows (both cascade-derived) — affects no quoted number |
 | `conv-ids/` | conversation-id manifests for the v3/v4/v5 training slices | exact `slice_convs.py` preset outputs — deterministically reproducible (seeds, per-subset rounding, val sampling all verified against the manifests) |
 | `MANIFEST.sha256` | hash pin for everything above | `find . -type f ! -name MANIFEST.sha256 \| sort \| sed 's|^\./||' \| xargs sha256sum` (prefix-free so `sha256sum -c` and the uploader's set check both round-trip) |
@@ -147,7 +150,7 @@ walled off (all frozen sets pairwise hash-disjoint; builders enforce it):
 |---|---|---|
 | quantization (`quant/quantize.py`) | `calib-cascade-v1` only | activations decide GPTQ grouping; no_robots/Belebele never enter — keeps the guard honest |
 | drafter training (`drafter/slice_convs.py` → `regen.py` → …) | cascade pool prompts via `conv-ids` presets | slices hash-banned from every frozen set; `regen.py` rewrites assistant turns with the deployed quant — training data is quant-written completions + quant states, never cascade's original assistant text, never bf16 |
-| evaluation (`quant/probe.py`, `drafter/eval_ladder.sh`) | `probe-v4` → headline weightedKL; `probe-guard` → OOD anti-gaming check; `ladder-20` → headline τ + per-epoch checkpoint selection | ladder-20 is hash-banned from training; probe-guard is consumed by nothing — pure held-out referee |
+| evaluation (`quant/probe.py`, `quant/traj_probe.py`, `drafter/eval_ladder.sh`) | `probe-v4` → headline weightedKL; `traj-v1` → rollout agreement (agree@1, exact@32, per-domain — where looping/tool-format drift shows); `probe-guard` → OOD anti-gaming check; `ladder-20` → headline τ + per-epoch checkpoint selection | ladder-20 is hash-banned from training; probe-guard and traj-v1 are consumed by nothing upstream — pure held-out referees |
 
 One documented exception: ladder-20 prompt texts recur inside calib rows (both
 cascade-derived) — τ compares drafters against the same target model, so the
@@ -242,7 +245,7 @@ must source/import one of them — no exceptions.
 
 ```
 models.py            family registry (dims, taps, hub ids) — single source of truth
-quant/               build_calib.py · quantize.py · probe.py
+quant/               build_calib.py · quantize.py · probe.py · traj_probe.py
 drafter/             slice_convs.py · regen.py · regen_pool.sh (standing per-model regen) ·
                      prep_dataset.py · extract_states.py · reshape_tokens.py · slice_rungs.py ·
                      data_ladder.sh · sweep_epochs.sh · bootstrap_draft.py · eval_ladder.sh ·

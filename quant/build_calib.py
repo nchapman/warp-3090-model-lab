@@ -18,6 +18,11 @@ Modes:
   probe  — a fresh multi-domain ruler in the frozen probe-v4 style, with
            explicit --targets (v4 allocation: chat 90, math 80, IF 40,
            science 30, conv_agent 18, terminal 14, swe 16, ML 10x9).
+  traj   — the frozen trajectory-probe set (traj-v1.jsonl): ~300 held-out
+           rows weighted toward the KL ruler's blind spots (agentic 100,
+           math 60, IF 25, chat 40 + a long-context chat slice at
+           >=12K chars, belebele 9 langs x 4) for 32-token greedy rollout
+           agreement against base (quant/traj_probe.py).
   guard  — external OOD guard (HuggingFaceH4/no_robots + facebook/belebele,
            9 languages), never calibrated on.
 
@@ -90,6 +95,22 @@ V4_TARGETS = {"chat": 90, "math": 80, "instruction_following": 40, "science": 30
               "conversational_agent": 18, "terminal_agent": 14, "swe": 16}
 ML_PER_LANG = 10
 
+# frozen traj-v1 allocation (the rollout-agreement ruler; default for
+# --mode traj). terminal/swe/conv_agent = the KL probe's thin domains,
+# chat_long = long-context slice (min chars enforced per-slice at build),
+# ML = belebele x9 langs (fresh rows, disjoint from probe-v4/guard ML).
+TRAJ_TARGETS = [
+    # (subset, domain tag, n, min_chars, max_chars)
+    ("terminal_agent", "terminal_agent", 50, MIN_CHARS, MAX_CHARS),
+    ("swe", "swe", 25, MIN_CHARS, MAX_CHARS),
+    ("conversational_agent", "conversational_agent", 25, MIN_CHARS, MAX_CHARS),
+    ("math", "math", 60, MIN_CHARS, MAX_CHARS),
+    ("instruction_following", "instruction_following", 25, MIN_CHARS, MAX_CHARS),
+    ("chat", "chat", 40, MIN_CHARS, 12_000),
+    ("chat", "chat_long", 40, 12_000, 24_000),
+]
+TRAJ_ML_PER_LANG = 4
+
 
 def row_hash(msgs):
     first_user = next((m["content"] for m in msgs if m["role"] == "user"), "")
@@ -102,7 +123,8 @@ def banned_hashes(extra_excludes):
     provenance ledger (the sidecar must enumerate ALL selection inputs,
     not just the pools sampled from)."""
     banned = set()
-    for frozen in ["calib-cascade-v1.jsonl", "probe-v4.jsonl", "probe-guard.jsonl"]:
+    for frozen in ["calib-cascade-v1.jsonl", "probe-v4.jsonl", "probe-guard.jsonl",
+                   "traj-v1.jsonl"]:
         p = DATA / frozen
         if p.exists():
             record_source("frozen-set (exclusion input)", p)
@@ -168,8 +190,11 @@ def record_source(dataset, path, **extra):
     return rec
 
 
-def pool_for(pool_dir, subset, need, rng, banned):
-    """Randomized row-group scan across the subset's parquet shards."""
+def pool_for(pool_dir, subset, need, rng, banned,
+             min_chars=MIN_CHARS, max_chars=MAX_CHARS):
+    """Randomized row-group scan across the subset's parquet shards.
+    min/max_chars override the global bounds for slices that need them
+    (e.g. traj-v1's chat_long long-context slice)."""
     files = sorted(glob.glob(f"{pool_dir}/{subset}_*.parquet"))
     if not files:
         sys.exit(f"no parquet shards for {subset!r} under {pool_dir} — download the "
@@ -193,6 +218,9 @@ def pool_for(pool_dir, subset, need, rng, banned):
             for msgs, gen in zip(t["messages"].to_pylist(), t["generator"].to_pylist()):
                 msgs = [{"role": m["role"], "content": m.get("content") or ""} for m in msgs]
                 if not valid(msgs):
+                    continue
+                total = sum(len(m["content"]) for m in msgs)
+                if not (min_chars <= total <= max_chars):
                     continue
                 h = row_hash(msgs)
                 if h in banned:
@@ -359,6 +387,21 @@ def build_probe(args, rng, banned):
     return rows
 
 
+def build_traj(args, rng, banned):
+    rows = []
+    for subset, tag, n, lo, hi in TRAJ_TARGETS:
+        pool = pool_for(args.pool, subset, int(n * OVERSAMPLE), rng, banned,
+                        min_chars=lo, max_chars=hi)
+        sel = stratified(pool, min(n, len(pool)), rng)
+        rows += [{"domain": tag, "generator": gen, "source": CASCADE_SOURCE,
+                  "conversations": msgs} for msgs, gen in sel]
+        print(f"{tag}: {len(sel)}/{n} (chars {lo}-{hi})", flush=True)
+    for lang in BELEBELE_LANGS:
+        rows += belebele_rows(lang, args.ml_per_lang, rng, banned, args.raw_dir)
+    rng.shuffle(rows)
+    return rows
+
+
 def hf_parquet_urls(dataset, config, split=None):
     """Converted-parquet URLs for a dataset config. Returns (split, urls).
     An explicitly requested split MUST exist (hard exit otherwise — silent
@@ -455,7 +498,7 @@ def build_guard(args, rng, banned):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--mode", choices=["calib", "probe", "guard", "v1-repro"],
+    ap.add_argument("--mode", choices=["calib", "probe", "traj", "guard", "v1-repro"],
                     required=True)
     ap.add_argument("--out", required=True, help="output jsonl path")
     ap.add_argument("--pool", default="data-raw/cascade",
@@ -465,7 +508,9 @@ def main():
     ap.add_argument("--targets-json", default=None,
                     help="mode=probe domain targets as a JSON dict "
                          "(default: the frozen probe-v4 allocation)")
-    ap.add_argument("--ml-per-lang", type=int, default=ML_PER_LANG)
+    ap.add_argument("--ml-per-lang", type=int, default=None,
+                    help="belebele rows per language for probe/traj modes "
+                         "(defaults: probe 10, traj 4)")
     ap.add_argument("--n-robots", type=int, default=40)
     ap.add_argument("--no-robots-split", choices=["train", "test"], default="train",
                     help="no_robots split to sample (default train — the frozen "
@@ -483,6 +528,8 @@ def main():
         args.targets = json.loads(args.targets_json)
     else:
         args.targets = V4_TARGETS
+    if args.ml_per_lang is None:
+        args.ml_per_lang = TRAJ_ML_PER_LANG if args.mode == "traj" else ML_PER_LANG
 
     pool = Path(args.pool)
     args.pool = str(pool if pool.is_absolute() else ROOT / pool)
@@ -521,6 +568,8 @@ def main():
         rows, probe_rows = reproduce_v1(args, rng)
     elif args.mode == "probe":
         rows = build_probe(args, rng, banned)
+    elif args.mode == "traj":
+        rows = build_traj(args, rng, banned)
     else:
         rows = build_guard(args, rng, banned)
 

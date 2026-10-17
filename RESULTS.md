@@ -47,6 +47,41 @@ this box). Uniformly worse, not just tails: chat 0.066/0.044, math
 Verdict: keep cascade-v1; the general blend's missing agentic/tool coverage
 is measurable, and nobody ablates this because nobody measures.
 
+### Rollout agreement — traj-v1 ruler (2026-10-17, GB10, greedy 32-token)
+
+`quant/traj_probe.py` on the 4B champion vs bf16 base, frozen `traj-v1.jsonl`
+(301 rows; both models greedy from identical prompts, rollout = ids through
+first EOS). The compounding-regime instrument: teacher-forced KL scores the
+quant along the *base's* tokens; this measures what happens once the quant's
+own drift feeds back. Unsloth Divergence-300-style exact@32.
+
+| | agree@1 | agree@8 | agree@16 | exact@32 | prefix p50/p10 |
+|---|---|---|---|---|---|
+| **OVERALL (301)** | 0.827 | 0.542 | 0.439 | **0.239** | 10 / 0 |
+| swe (25) | 0.880 | 0.000 | 0.000 | **0.000** | 2 / 0 |
+| terminal_agent (50) | 0.880 | 0.360 | 0.160 | 0.080 | 4 / 0 |
+| conv_agent (25) | 0.920 | 0.480 | 0.200 | 0.040 | 5 / 2 |
+| ML belebele (36) | **0.444** | 0.250 | 0.194 | 0.083 | 0 / 0 |
+| math (60) | 0.850 | 0.633 | 0.533 | 0.333 | 20 / 0 |
+| chat (40) | 0.875 | 0.775 | 0.700 | 0.350 | 27 / 0 |
+| chat_long (40) | 0.850 | 0.775 | 0.700 | 0.400 | 23 / 0 |
+| instruction_following (25) | 0.960 | 0.960 | 0.960 | 0.560 | 32 / 19 |
+
+Findings: **(1) the agentic cliff is real at 4-bit GPTQ.** swe agrees for
+~2 tokens then never (exact@32 = 0/25, agree@8 = 0) — while its agree@1
+(0.88) looks healthy. The conv_agent KL wall (1.60–2.20 vs chat 0.066 in
+probe-v4) predicted this concentration; teacher-forced KL understates it
+because the wall never compounds downstream. **(2) ML diverges at token 1**
+(agree@1 0.44, median prefix 0 — worse immediately than any agentic domain;
+the 10% ML weight in weightedKL hides this). **(3) even chat pays the
+compounding tax**: exact@32 0.35–0.40 despite KL 0.066. **(4) IF is the
+healthiest** (rigid response openings dominate the first 32 tokens).
+Cost: 11 min for both sides (301 rows) on GB10 — cheap enough to run per
+contender. Per-row dump (texts, prefixes) at `slices/traj-champ4b-rows.jsonl`
+(local scratch, for future paired bootstrap). Sampling note: greedy ignores
+the champion's stamped SERVING_PARAMS sampling flags (`do_sample=False`),
+confirmed by the harness's invalid-generation-flags warning in the run log.
+
 ## Drafters (DFlash2, quant-aligned, 4B)
 
 Scaling ladder (fixed chat-heavy cascade blend, block 16, interval-weighted τ

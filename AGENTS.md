@@ -109,7 +109,14 @@ the champion ckpt survive.
 
 **Eval.** `data/ladder-20.jsonl` is GENERAL CHAT ONLY — every τ ever
 quoted (incl. champion 3.79) is general-chat τ. No code/agentic/long
-eval exists. Don't claim deployment relevance without one.
+eval exists. Don't claim deployment relevance without one. The
+agentic/long *quant-damage* ruler exists since 2026-10-17:
+`data/traj-v1.jsonl` (301 rows, agentic 100 / math 60 / chat+long 80 /
+IF 25 / Belebele 36) read by `quant/traj_probe.py` — paired greedy 32-
+token rollouts; report agree@1, exact@32, per-domain (the compounding
+regime; Unsloth Divergence-300-style). Teacher-forced KL (probe.py) is a
+different instrument — never average the two, compare per-domain
+directions.
 
 **Measured anchors (τ @ t=0.7 n=4 unless noted):** 4B 5.2M supervised →
 1.05 flat (UNSOUND — off-policy artifact, see corpus section; do not
