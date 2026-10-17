@@ -29,8 +29,8 @@ learned the hard way.
   three purposes:
   - **t=0 (greedy)** — the low-noise instrument (repeat spread ~0.05). Use to
     sanity-check stability, not to pick shipping checkpoints.
-  - **t=0.7 (serving)** — the deployment point and the corpus generation
-  config. **Selection happens here**, n≥4 per contender (spread ~0.1).
+  - **t=0.7 (serving)** — the deployment point and the selection temperature.
+  **Selection happens here**, n≥4 per contender (spread ~0.1).
   - **t=1.0** — heavy-tailed (0.34 spread observed on identical inputs).
   Never rank checkpoints on small n at t≥0.7; never quote a single draw as a
   result. Report n and ranges with every number.
@@ -87,16 +87,15 @@ INPUT, NOT A CORPUS** — it is slice_a+slice_b regrouped by conversation:
 bare contexts, every row ends user/tool, ZERO regenerated responses.
 The final assistant turn of every conversation is absent; single-turn
 rows (51% of file — ALL math + science, plus 60K chat/IF/agent) carry no
-supervision at all and are dropped by prep. The true corpus (contexts +
-on-policy finals; what the champion trained on) was pod-side
-/root/dflash_data_v4 and is GONE with the pod — only regen inputs and
-the champion ckpt survive.
+supervision at all and are dropped by prep. The previous project version's
+corpus (contexts + on-policy finals) is gone — contexts survive here;
+the next corpus is built fresh per the reference idiom (below), not
+reconstructed from history.
 - Mix — the file's row labels (chat 65/math 12.5/science 8/…) describe
   PROMPT POOL composition, not training data. Ladder-side effective mix
   (supervised tokens in context turns): chat ~87% / agents ~11%; math 0,
-  science 0 (single-turn → no supervision). Champion-side mix includes
-  regenerated finals (rate unknown, node logs gone). Code ≈ 6% of
-  context content (measured).
+  science 0 (single-turn → no supervision). Code ≈ 6% of context content
+  (measured).
 - **τ 1.05 (rung 1) is NOT a clean dead-zone number**: it trained
   off-policy (source responses only, zero on-policy finals) and scored
   BELOW the epoch-0 control (3.407) — distribution-mismatch signature,
@@ -108,17 +107,25 @@ the champion ckpt survive.
 `prep_dataset.py --loss-mode all|last --max-tokens N` (drop cap).
 
 **Eval.** `data/ladder-20.jsonl` is GENERAL CHAT ONLY — every τ ever
-quoted (incl. champion 3.79) is general-chat τ. No code/agentic/long
-eval exists. Don't claim deployment relevance without one.
+quoted (all historical numbers included) is general-chat τ. No
+code/agentic/long eval exists. Don't claim deployment relevance without one.
 
-**Measured anchors (τ @ t=0.7 n=4 unless noted):** 4B 5.2M supervised →
-1.05 flat (UNSOUND — off-policy artifact, see corpus section; do not
-quote as a dead-zone number); 4B ~150M → **3.79**; epoch-0 control 3.407.
-0.8B: 0.7M → 1.024, 3.5M → 1.08–1.09 (n=1) — dead zone extends to ≥3.5M at
-0.8B; MTP k=15 untrained head = 2.868 on the same ladder (the bar a
-trained 0.8B drafter must beat). External: DSpark 100K prompts ≤1024 →
-3.41; DFlash 100K-sample ablations → 4.9–5.6 greedy. Dead zone < ~5M
-supervised (two sources); known-good 20–60M; rising to ~1B (DFlare).
+**τ bars and the dead-zone map (τ @ t=0.7 n=4 unless noted).** These are
+the numbers a run answers to — external references, not internal history:
+- **THE BAR: untrained MTP k=15 head = 2.868** on ladder-20. Any shipped
+  drafter must beat it. Nothing at ≤1.4 ships.
+- **Reference recipes:** DSpark 100K prompts ≤1024 → 3.41; DFlash paper
+  100K-sample ablations → 4.9–5.6 greedy. An idiomatic run targets
+  DSpark-class ≥3.41; optimization starts from there.
+- Dead zone: <~5M supervised (two sources); known-good 20–60M; rising to
+  ~1B (DFlare). 0.8B: 0.7M → 1.024, 3.5M → 1.08–1.09 (n=1) — dead zone
+  extends to ≥3.5M at 0.8B.
+- 4B 5.2M supervised → 1.05 flat is NOT a clean dead-zone number
+  (off-policy artifact — see corpus section; do not quote as one).
+- Historical only, do not chase: a 4B run from a previous version of this
+  project reached 3.79 (GB10-era; re-anchored 3.714 n=4 on the current
+  pod stack — proof the stack and this recipe-class can reach ≥3.7, and
+  nothing more).
 
 **Loss-weighting footgun:** speculators 0.8.1 defaults dflash to
 `--per-position-loss-weight dpace` — the documented γ=7 static decay runs
@@ -143,7 +150,8 @@ default GPU_MEM_UTIL=0.6; env-overridable — use 0.9 on dedicated pod
 hardware) — the box is shared with llama-swap and a
 desktop session.**
 
-**Models registry.** `models.py` keys: 4b (champion, taps_v4
+**Models registry.** `models.py` keys: 4b (imported ckpt from a
+previous version of this project — warm-start source ONLY, taps_v4
 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24], local quant
 `Qwen3.5-0.8B-W4A16-GPTQ/`), 9b, 27b (taps UNVALIDATED).
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
@@ -154,16 +162,22 @@ gap, document-before-rebuild). All quants to date share this lineage.**
 
 **Regen doctrine (the standing per-model process).** Contexts are the
 shared invariant; every target model regenerates finals ON-POLICY with its
-deployed quant: `drafter/regen_pool.sh <model-key>`. Sampling =
-`models.py SERVING_PARAMS` (t 0.7 / top_p 0.95 / top_k 20 — the deployment
-point + DFlash2 distribution pair), also stamped into every quant's
-generation_config.json at quant time. Outputs land in `data/` (this repo).
-GB10 measured: conc 128, MTP off (spec-decode LOSES at saturation:
-313 vs 249 rows/min), GPU_MEM_UTIL=0.6. Historical: the champion's v1
-regen predates SERVING_PARAMS and lacked top_k.
+deployed quant: `drafter/regen_pool.sh <model-key>`. The GENERATOR config
+follows the reference idiom — t 0.7 / top_p 0.95, **no top_k**, lengths
+capped per spec (paper 3072 or DSpark ≤1024 — state which), one conv per
+sample, `minimum-valid-tokens` filter ON. `models.py SERVING_PARAMS`
+(t 0.7 / top_p 0.95 / top_k 20) is the SERVE config — written into every
+quant's generation_config.json at quant time — and explicitly NOT the
+generator config. Lesson (2026-10-17, ~$170): stamping the serve config
+into the data generator was an untested divergence from every reference.
+Outputs land in `data/` (this repo). GB10 measured: conc 128, MTP off
+(spec-decode LOSES at saturation: 313 vs 249 rows/min),
+GPU_MEM_UTIL=0.6.
 
-**Literature idiom (verified from primary sources).** On-policy regen
-by the exact deployed target; one conv per sample (first-turn common);
-short or capped lengths (paper 3072; DSpark ≤1024); PerfectBlend =
- ecosystem default mix and NOBODY ablates mix; `minimum-valid-tokens`
-filter (speculators) — we lack it.
+**Literature idiom (verified from primary sources) — THE SPEC for the
+next run.** On-policy regen by the exact deployed target; one conv per
+sample (first-turn common); short or capped lengths (paper 3072; DSpark
+≤1024); PerfectBlend = ecosystem default mix and NOBODY ablates mix;
+`minimum-valid-tokens` filter (speculators) — REQUIRED for the next
+corpus. Next campaign = this idiom, nothing else; target DSpark-class
+≥3.41, then optimize.
