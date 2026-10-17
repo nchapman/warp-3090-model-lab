@@ -503,6 +503,10 @@ def main():
         pre_banned = set(banned)
 
     probe_rows = None
+    if args.mode == "v1-repro" and (args.n != CALIB_V1_N or args.targets_json):
+        sys.exit("v1-repro rebuilds the frozen pair with fixed counts/mix "
+                 "(CALIB_V1_N/PROBE_V1_N, card proportions) — it ignores --n "
+                 "and --targets-json by design; tune with --mode calib/probe")
     if args.mode == "calib":
         rows = build_calib(args, rng, banned)
     elif args.mode == "v1-repro":
@@ -511,7 +515,7 @@ def main():
         # the byte-compare would then certify the rewrite against itself
         out_early = Path(args.out)
         out_early = out_early if out_early.is_absolute() else ROOT / out_early
-        if out_early.resolve().parent == DATA.resolve():
+        if out_early.resolve().is_relative_to(DATA.resolve()):
             sys.exit(f"v1-repro --out must not write into data/ (use slices/) — "
                      "data/ holds the verification references, not targets")
         rows, probe_rows = reproduce_v1(args, rng)
