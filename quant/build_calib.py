@@ -58,6 +58,11 @@ CASCADE_SOURCE = "nvidia/Nemotron-Cascade-2-SFT-Data"
 OVERSAMPLE = 2.5
 # the frozen v1 build's row counts (original builder: CALIB_N/PROBE_N)
 CALIB_V1_N, PROBE_V1_N = 1000, 250
+# sha256 of the original day-0 probe companion (llm-compressor/
+# probe-cascade-v1.jsonl; this repo's reconstruction matched it 2026-10-17).
+# The ruler's bytes are the contract: any rng-stream divergence in the probe
+# draw fails v1-repro here, even when the calib stream happens to match.
+DAY0_PROBE_SHA256 = "1ea94688f1c073e6ef7c3ac38ad8c4ab9f98db5f3c95fee6e56d815253ade2fd"
 
 # Provenance ledger: one record per upstream byte we read this run. Written
 # next to the output as <out>.sources.json — transparency contract: any set
@@ -471,7 +476,7 @@ def main():
                     help="jsonl glob(s) whose conversations must not be sampled")
     ap.add_argument("--seed", type=int, default=SEED)
     args = ap.parse_args()
-    from lablog import log_event
+    from lablog import log_event, run_fail
     log_event("RUN_START", mode=args.mode, out=args.out)
 
     if args.targets_json:
@@ -501,6 +506,14 @@ def main():
     if args.mode == "calib":
         rows = build_calib(args, rng, banned)
     elif args.mode == "v1-repro":
+        # a reconstruction must never overwrite what it verifies against:
+        # --out data/calib-cascade-v1.jsonl would truncate the frozen set and
+        # the byte-compare would then certify the rewrite against itself
+        out_early = Path(args.out)
+        out_early = out_early if out_early.is_absolute() else ROOT / out_early
+        if out_early.resolve().parent == DATA.resolve():
+            sys.exit(f"v1-repro --out must not write into data/ (use slices/) — "
+                     "data/ holds the verification references, not targets")
         rows, probe_rows = reproduce_v1(args, rng)
     elif args.mode == "probe":
         rows = build_probe(args, rng, banned)
@@ -544,20 +557,32 @@ def main():
                    "sources": SOURCES}, f, indent=1)
     print(f"\n{args.mode}: {len(rows)} rows -> {out}")
     print(f"sources manifest: {sidecar}")
+    # v1-repro is a reconstruction CLAIM — verify BEFORE run_done so the event
+    # log can't record a drifted reconstruction as ok. Missing references are
+    # a hard failure (broken checkout), never a skip-and-exit-0.
+    if args.mode == "v1-repro":
+        frozen = DATA / "calib-cascade-v1.jsonl"
+        if not frozen.exists() or not probe_path.exists():
+            run_fail(mode=args.mode, reason="verification reference missing "
+                     f"({frozen} / {probe_path})")
+            sys.exit(f"v1-repro: verification reference missing "
+                     f"({frozen} or {probe_path})")
+        try:
+            verify_frozen_repro(out, frozen)
+            probe_sha = sha256_file(probe_path)
+            if probe_sha != DAY0_PROBE_SHA256:
+                raise SystemExit(f"V1_REPRO_DRIFT: probe companion sha256 "
+                                 f"{probe_sha} != day-0 ruler {DAY0_PROBE_SHA256}")
+            print(f"PROBE_REPRODUCED sha256-exact (day-0 ruler) == {DAY0_PROBE_SHA256}")
+        except SystemExit as e:
+            run_fail(mode=args.mode, verification="drift", detail=str(e.code))
+            raise
+
     from lablog import run_done
     run_done(mode=args.mode, rows=len(rows), sidecar=str(sidecar))
     print("domains:", dict(Counter(
         "ML" if (r.get("domain") or "").startswith("belebele") else r.get("domain")
         for r in rows)))
-
-    # v1-repro is a reconstruction CLAIM — it is not done until the claim is
-    # checked: byte-exact against the frozen set, or nonzero exit
-    if args.mode == "v1-repro":
-        frozen = DATA / "calib-cascade-v1.jsonl"
-        if frozen.exists():
-            verify_frozen_repro(out, frozen)
-        else:
-            print(f"WARNING: {frozen} missing — reconstruction NOT verified")
 
 
 if __name__ == "__main__":

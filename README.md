@@ -165,11 +165,13 @@ arrows; the converted-parquet API has served split lists in unstable order).
 One exception, closed 2026-10-17: `calib-cascade-v1` **is** regenerable —
 `--mode v1-repro` rebuilds it **byte-exact** from the raw pool
 (`data-raw/cascade/`, 21 parquet shards, gitignored like all raw pools and
-hash-pinned in `data/MANIFEST.raw-pools.sha256`) and self-verifies against the
-frozen file, exiting nonzero on any drift. The co-built day-0 probe companion
-reproduces byte-exact as well (verified against the original in the old lab
-home). probe-v4 and probe-guard stay freshness-by-design: new builds are
-hash-disjoint, never regenerations.
+hash-pinned in `data/MANIFEST.raw-pools.sha256` — verify with
+`sha256sum -c data/MANIFEST.raw-pools.sha256` from the repo root; the pin file
+itself is registered in `data/MANIFEST.sha256`). The mode refuses to write
+into `data/` and self-verifies both artifacts — the calib against the frozen
+file's bytes, the co-built day-0 probe companion against the original ruler's
+pinned sha256 — exiting nonzero on any drift. probe-v4 and probe-guard stay
+freshness-by-design: new builds are hash-disjoint, never regenerations.
 
 **Licenses** (check before redistributing): cascade-derived sets → NVIDIA Open
 Model License; probe-guard no_robots rows → CC-BY-NC-4.0 (non-commercial);
