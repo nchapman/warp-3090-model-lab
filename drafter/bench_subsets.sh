@@ -128,9 +128,10 @@ PY
     _prev=$_n; sleep 5
   done
   (( _capped )) && log_event WINDOW_CAPPED "subset=$s waited=60s"   # possibly truncated window
-  "$VENV/python" - "$LOG" "$off" "$s" "$RESULTS_CSV" "$nprompts" >> "$OUT" 2>&1 << 'PYTAU' || finish_fail "stage=metric subset=$s"
+  FLOOR=${FLOOR_PER_PROMPT:-25}
+  "$VENV/python" - "$LOG" "$off" "$s" "$RESULTS_CSV" "$nprompts" "$FLOOR" >> "$OUT" 2>&1 << 'PYTAU' || finish_fail "stage=metric subset=$s"
 import csv, re, sys
-log, off, s, csv_path, nprompts = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5])
+log, off, s, csv_path, nprompts, floor_per_prompt = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], int(sys.argv[5]), int(sys.argv[6])
 pat = re.compile(r"Mean acceptance length: ([0-9.]+),.*Accepted: (\d+) tokens")
 a = t = 0
 with open(log, "rb") as f:
@@ -141,11 +142,13 @@ with open(log, "rb") as f:
 tau = a / t if t else 0.0
 if t == 0:
     sys.exit(f"no acceptance lines in log window — flush missed or format drift: subset={s}")
-# window must be consistent with what was driven: healthy runs land well
-# above 25 accepted tokens/prompt (observed 180-340); below that = truncated
-# window. (No ceiling: vLLM's accepted-token accounting is not bounded by
-# n*max_tokens — observed 336/prompt on a healthy smoke window.)
-if t < nprompts * 25:
+# window must be consistent with what was driven: guard against truncated
+# log windows (vLLM stats flush lag), NOT a quality gate. Default 25/prompt
+# fits healthy drafters (observed 180-340); weak drafters on hard subsets
+# legitimately land below it (measured 16/prompt on HumanEval at τ~1.2) —
+# set FLOOR_PER_PROMPT lower for sub-2τ candidates. No ceiling: vLLM's
+# accepted-token accounting is not bounded by n*max_tokens.
+if t < nprompts * floor_per_prompt:
     sys.exit(f"accepted tokens ({t}) below plausible floor for n={nprompts} — truncated window: subset={s}")
 print(f"SUBSET {s} {tau:.3f} accepted={t}")
 with open(csv_path, "a", newline="") as f:

@@ -1,0 +1,9 @@
+# Timestamp: 2026-10-17T09:16:01.182620+00:00
+# Git SHA: unknown
+# World size: 1
+# speculators: 0.8.1
+# vllm: 0.31.0
+# transformers: 5.16.1
+# torch: 2.13.0
+# compressed-tensors: 0.17.0
+.venv-dflash/bin/speculators --speculator-type dflash2 --draft-attn-impl simple_flex_attention --from-pretrained draft_init --verifier-name-or-path /root/.cache/huggingface/hub/models--nchapman--Qwen3.5-4B-W4A16-GPTQ/snapshots/d5874365f7093b28b69379722d2f45d660fcbca6 --data-path ds_regen4b_sft --epochs 3 --lr 6e-4 --scheduler-type cosine --scheduler-warmup-ratio 0.04 --per-position-loss-weight fixed-exp-decay --dflash-decay-gamma 7 --max-anchors 512 --checkpoint-freq 1 --train-data-ratio 0.97 --log-freq 10 --save-path draft_ctrl4b
