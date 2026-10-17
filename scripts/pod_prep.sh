@@ -37,7 +37,7 @@ stage() { printf '\n== %s (%s)\n' "$1" "$(date +%H:%M:%S)"; }
 # old eval scratch dirs, and local quant dirs (models come from the Hub).
 EXCLUDES=(.venv-* runs .git __pycache__ .pi
           .pytest_cache .mypy_cache smoke 'eval_*' 'Qwen3.5-*-GPTQ*'
-          '*.pyc' .DS_Store)
+          '*.pyc' .DS_Store quants data-raw slices)
 RSYNC_EXCLUDES=()
 for x in "${EXCLUDES[@]}"; do RSYNC_EXCLUDES+=(--exclude "$x"); done
 
