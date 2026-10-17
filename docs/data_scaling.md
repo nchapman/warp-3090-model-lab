@@ -28,10 +28,13 @@ contexts, every row ends user/tool, **zero responses**. Consequences:
 - Lengths: mean 2,115 / median 1,676 / p90 4,588 / p99 6,207 tokens,
   uncapped (paper spec caps at 3072; DSpark reference preps ≤1024).
 
-**τ 1.05 (rung 1) is NOT a clean dead-zone number**: trained off-policy,
-scored BELOW the epoch-0 control (3.407) — distribution-mismatch
-signature (taught source-model text, evaluated against quant text);
-volume was confounded with data-kind. The rung-1 *observations* stand
+**τ 1.05 (rung 1) is NOT a clean dead-zone number**: trained off-policy.
+At t=0.7 it sat flat at ~1.05 across all epochs (n=4) — dead zone. Its
+greedy sweep *improved* over the epoch-0 control (3.407 → 4.157, both
+t=0, n=1 vs n=2, `runs/sweep-sweepfix2`) — greedy gains that don't transfer to
+serving are the distribution-mismatch signature (taught source-model
+text, evaluated against quant text); volume was confounded with
+data-kind. The rung-1 *observations* stand
 (extraction parity 20/20; loss 2.90→2.76; recall@16 0.30; flat
 1.04–1.05 across all 6 epochs) — the conclusion doesn't.
 

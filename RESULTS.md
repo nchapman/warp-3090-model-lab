@@ -42,8 +42,9 @@ serve-down-robust pick. MTP re-anchored on the same ladder: k=1 1.78, k=2 2.32,
 k=3 **2.71** (the published "3.90" was their harness, not ours).
 
 External anchors: champion 9-subset weighted 4.16 vs full MTP 3.26 (wins 8/9
-subsets); premium 27B DFlash2 on our ladder 2.959 @ matched b8 — the 4B
-champion beats it with a GPTQ verifier + serve-down handicaps stacked.
+subsets) — first-pass reads; the confirmed profile below is authoritative
+(4.65 vs 3.21, 9/9). Premium 27B DFlash2 on our ladder 2.959 @ matched b8
+— the 4B champion beats it with a GPTQ verifier + serve-down handicaps stacked.
 
 9B / 27B drafters: init configs built (models.py), never trained — 27B was a
 measured NO-GO (bounded upside vs ~5× pod cost). Untested until run and
@@ -147,7 +148,13 @@ floor-mapping, not selection data). Dataset = banked 0.8B regen finals
 | ~0.7M (320) | dpace-default | 1.024 |
 | ~3.5M (3,000) | static γ7 | 1.081 |
 | ~3.5M (3,000) | dpace α0.5 | 1.090 |
-| — | MTP k=15 control (untrained head) | **2.868** |
+| — | MTP control (untrained head, k=3) | **2.868** |
+
+(Row relabeled 2026-10-18: the run is named "mtp-15" because `eval_mtp.sh
+15 8151` consumed 15 as the run NAME — arg 3 is SPEC, defaulted to 3.
+`results/results.csv` records `spec=mtp-k3`; consistent with the GB10
+anchor table's native-MTP k=3 → 2.86. It is the 4B quant's MTP head,
+used as the shared floor bar for the 0.8B testbed — not 0.8B-native.)
 
 - **Dead zone at 0.8B extends to ≥3.5M supervised** — 5× data moved τ +0.06.
   The 3.5M D-PACE A/B is therefore uninformative for the method (both arms at
@@ -170,9 +177,10 @@ floor-mapping, not selection data). Dataset = banked 0.8B regen finals
 ## Optimized 4B run: D-PACE + Draft-OPD (2026-10-17, B200 pod, on its own merit)
 
 Single optimized arm on the regen-v4 corpus, same pod and ladder as the
-permanent re-anchors (imported 4B ckpt 3.714, untrained MTP head 2.868;
-both t=0.7 n=4). Outcome: the optimized arm **dead-zone plateaus**, and a
-same-corpus static-control arm (imported recipe verbatim) fails identically
+permanent re-anchors (imported 4B ckpt 3.714 @ t=0.7 n=4; MTP floor 2.868
+quoted from its GB10 measurement, not re-measured here). Outcome: the
+optimized arm **dead-zone plateaus**, and a same-corpus static-control
+arm (imported recipe verbatim) fails identically
 — the cause is input/assembly-side, not the loss function. **NO SHIP**;
 pod torn down at ~$167 total ($190 budget).
 
