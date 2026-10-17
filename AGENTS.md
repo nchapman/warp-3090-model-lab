@@ -167,6 +167,10 @@ transients) and never mega-allocs — use it for 35B-class loads.
 **Models registry.** `models.py` keys: 4b (champion, taps_v4
 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24], local quant
 `Qwen3.5-0.8B-W4A16-GPTQ/`), 9b, 27b (taps UNVALIDATED).
+4B artifact warning (2026-10-17): the champion calib-recipe artifact lives in
+~/Code/llm-compressor/Qwen3.5-4B-W4A16-GPTQ-**cascade** (suffix REQUIRED);
+the unsuffixed dir there is an ablation-era leftover that ablations overwrote
+in place — never probe it as the champion.
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
 **Calib truth: cascade-v1 = 999×4096 windows, 100%
 nvidia/Nemotron-Cascade-2-SFT-Data (checksum-pinned in data/MANIFEST.sha256;
