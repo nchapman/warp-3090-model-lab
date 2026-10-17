@@ -28,6 +28,9 @@ defined on these exact rows —
   (weightedKL 0.1087 @ 4B, 0.0889 @ 9B, 0.1264 @ 27B trace to it)
 - **probe-v4.jsonl** (378 rows) — the fidelity ruler; the weightedKL metric
 - **probe-guard.jsonl** (76 rows) — OOD guard (no_robots + Belebele, 9 languages)
+- **traj-v1.jsonl** (301 rows, + `.sources.json` sidecar) — the rollout-
+  agreement ruler (compounding-regime quant damage: agentic, math, ML,
+  long-chat); champion 4B exact@32 0.239, swe 0/25 measured on it
 - **ladder-20.jsonl** (20 prompts) — the acceptance ladder; the τ metric
   (shipped drafter τ 3.79 at the serving point / native MTP 2.86, measured on
   it)
@@ -41,6 +44,7 @@ defined on these exact rows —
 | calib-cascade-v1 | [nvidia/Nemotron-Cascade-2-SFT-Data](https://huggingface.co/datasets/nvidia/Nemotron-Cascade-2-SFT-Data), stratified at the card's own domain blend, seed 0 |
 | probe-v4 | cascade pool (v4 domain allocation) + [facebook/belebele](https://huggingface.co/datasets/facebook/belebele) 10 rows × 9 languages |
 | probe-guard | no_robots **train** split (40, verified against cached upstream arrows) + Belebele 4 × 9 languages |
+| traj-v1 | cascade pool (traj domain allocation; chat split at 12,000 chars into chat/chat_long) + Belebele 4 rows × 9 languages |
 | ladder-20 | rows 50–69 of the v1-era 100-row cascade dev set, held out from drafter training since the first DFlash2 run (2025-10-10); prompts-only (system+user) |
 | conv-ids | deterministic outputs of the repo's slicing presets |
 
@@ -52,12 +56,13 @@ Integrity: `MANIFEST.sha256` (sha256sum format) pins every file; verify with
 This is a derived, research-only collection; per-component terms apply and are
 carried here for transparency:
 
-- **calib-cascade-v1, probe-v4 (cascade rows), ladder-20** — derived from
+- **calib-cascade-v1, probe-v4 (cascade rows), ladder-20, traj-v1 (cascade
+  rows)** — derived from
   Nemotron-Cascade-2-SFT-Data: [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/)
 - **probe-guard (no_robots rows)** — derived from
   [HuggingFaceH4/no_robots](https://huggingface.co/datasets/HuggingFaceH4/no_robots):
   **CC-BY-NC-4.0** (non-commercial)
-- **probe-v4 / probe-guard (Belebele rows)** — derived from
+- **probe-v4 / probe-guard / traj-v1 (Belebele rows)** — derived from
   [facebook/belebele](https://huggingface.co/datasets/facebook/belebele):
   CC-BY-SA-4.0
 
@@ -70,7 +75,7 @@ is consumed by no other process — pure held-out referee.
 |---|---|
 | quantization (GPTQ) | calib-cascade-v1 only |
 | drafter training | cascade prompts via conv-ids presets, assistant turns rewritten by the deployed quant (regen) — never the original assistant text, never bf16 |
-| evaluation | probe-v4 → weightedKL headline; probe-guard → OOD check; ladder-20 → τ headline + checkpoint selection |
+| evaluation | probe-v4 → weightedKL headline; probe-guard → OOD check; traj-v1 → rollout agreement (exact@32 / agree@k, compounding regime); ladder-20 → τ headline + checkpoint selection |
 
 ## Reproduction
 

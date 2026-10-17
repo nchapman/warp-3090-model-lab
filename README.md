@@ -183,7 +183,7 @@ Belebele rows → CC-BY-SA-4.0. Regen outputs are Qwen model outputs.
 **HF mirror:** the frozen sets are dual-homed at
 `nchapman/warp-3090-quant-lab-frozen-data` (**public**, CC-BY-NC-4.0 top-level
 per the card — non-commercial research use; see license note above). Pinned at
-commit `8e38aa4`, verify against
+commit `945980f`, verify against
 `data/MANIFEST.sha256` after pulling). Good reason to freeze *on the Hub*
 rather than git alone: revision-hash citability, pull-by-pods without a repo
 clone, and a license/provenance surface git can't provide.
