@@ -80,7 +80,9 @@ python quant/probe.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ \
 For 9B/27B: same commands with `--model 9b` / `--model 27b` (27B quant wants
 ~80GB or device offload; 9B probe holds base+quant resident, ~40GB).
 Build new calib/probe sets with `quant/build_calib.py` (raw pool goes in
-`data-raw/`, not in git).
+`data-raw/`, not in git). `--mode v1-repro` reconstructs the frozen
+cascade-v1 calib byte-exact from that pool and self-verifies (see the
+reproducibility contract).
 
 ## Sequence 2 — drafter, small scale (drafter venv; Spark or any 24GB+ GPU)
 
@@ -159,8 +161,15 @@ pinning each upstream file it read (dataset revision + SHA256), so silent
 upstream drift (HF reshards, split-order flips) is detectable by diffing
 sidecars. The no_robots split is explicit (`--no-robots-split`, default `train`
 = the frozen set's actual source split, verified against the cached upstream
-arrows; the converted-parquet API has served split lists in unstable order). The frozen sets pre-date the sidecar mechanism and
-are pinned by `MANIFEST.sha256` + the HF mirror below.
+arrows; the converted-parquet API has served split lists in unstable order).
+One exception, closed 2026-10-17: `calib-cascade-v1` **is** regenerable —
+`--mode v1-repro` rebuilds it **byte-exact** from the raw pool
+(`data-raw/cascade/`, 21 parquet shards, gitignored like all raw pools and
+hash-pinned in `data/MANIFEST.raw-pools.sha256`) and self-verifies against the
+frozen file, exiting nonzero on any drift. The co-built day-0 probe companion
+reproduces byte-exact as well (verified against the original in the old lab
+home). probe-v4 and probe-guard stay freshness-by-design: new builds are
+hash-disjoint, never regenerations.
 
 **Licenses** (check before redistributing): cascade-derived sets → NVIDIA Open
 Model License; probe-guard no_robots rows → CC-BY-NC-4.0 (non-commercial);

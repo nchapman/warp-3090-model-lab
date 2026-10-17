@@ -5,6 +5,16 @@ Modes:
            dataset's own domain proportions (the champion cascade-v1 recipe;
            the frozen set itself ships in data/calib-cascade-v1.jsonl — you
            only need this mode to build NEW variants).
+  v1-repro — byte-exact reconstruction of the frozen cascade-v1 pair
+           (calib-cascade-v1.jsonl + its day-0 probe companion). Ports the
+           original builder's v1 branch (~llm-compressor/build_cascade_slices.py,
+           2026-10-09) exactly: seed 0, NO exclusions (the frozen sets did not
+           exist when v1 was built — banning them here would make exact
+           reconstruction impossible), calib+probe co-built on one rng stream
+           (probe targets size the pools, so they cannot be skipped). Writes
+           the calib to --out and the probe to <out stem>-probe.jsonl, then
+           verifies the calib row-for-row and byte-for-byte against
+           data/calib-cascade-v1.jsonl and exits nonzero on any drift.
   probe  — a fresh multi-domain ruler in the frozen probe-v4 style, with
            explicit --targets (v4 allocation: chat 90, math 80, IF 40,
            science 30, conv_agent 18, terminal 14, swe 16, ML 10x9).
@@ -46,6 +56,8 @@ SEED = 0
 MIN_CHARS, MAX_CHARS = 200, 600_000
 CASCADE_SOURCE = "nvidia/Nemotron-Cascade-2-SFT-Data"
 OVERSAMPLE = 2.5
+# the frozen v1 build's row counts (original builder: CALIB_N/PROBE_N)
+CALIB_V1_N, PROBE_V1_N = 1000, 250
 
 # Provenance ledger: one record per upstream byte we read this run. Written
 # next to the output as <out>.sources.json — transparency contract: any set
@@ -220,6 +232,72 @@ def build_calib(args, rng, banned):
              "domain": None, "generator": gen} for msgs, gen in rows]
 
 
+def reproduce_v1(args, rng):
+    """Rebuild the frozen cascade-v1 calib+probe exactly as originally built.
+
+    Faithful port of the original v1 branch: one rng stream over pool_for /
+    stratified calls, calib and probe targets drawn from the same pools
+    (probe sizing feeds `need`, so the rng stream only lines up if both are
+    drawn), domain-tagged rows, final independent shuffles. Any deviation
+    (exclusions, reordering, skipping the probe draw) breaks byte-exactness.
+    """
+    weights = {k: v / TOT for k, v in CARD_TOTALS.items()}
+    # original: ONE dedup set shared across subsets (cross-subset dupes are
+    # dropped too — per-subset sets would change pool composition)
+    banned = set()
+    calib_rows, probe_rows = [], []
+    print(f"{'subset':24s} {'share':>6s} {'calib':>5s} {'probe':>5s} pool")
+    for subset, share in weights.items():
+        n_calib = round(CALIB_V1_N * share)
+        n_probe = round(PROBE_V1_N * share)
+        need = int((n_calib + n_probe) * OVERSAMPLE)
+        pool = pool_for(args.pool, subset, need, rng, banned)
+        calib = stratified(pool, min(n_calib, len(pool)), rng)
+        taken = {id(r) for r in calib}
+        rest = [r for r in pool if id(r) not in taken]
+        probe = stratified(rest, min(n_probe, len(rest)), rng)
+        calib_rows += [{"conversations": msgs, "source": CASCADE_SOURCE,
+                        "domain": subset, "generator": gen} for msgs, gen in calib]
+        probe_rows += [{"domain": subset, "generator": gen,
+                        "source": CASCADE_SOURCE, "conversations": msgs} for msgs, gen in probe]
+        print(f"{subset:24s} {share:6.1%} {n_calib:5d} {n_probe:5d} {len(pool)}",
+              flush=True)
+    rng.shuffle(calib_rows)
+    rng.shuffle(probe_rows)
+    hc = {row_hash(r["conversations"]) for r in calib_rows}
+    hp = {row_hash(r["conversations"]) for r in probe_rows}
+    if hc & hp:
+        raise RuntimeError(f"reconstructed calib/probe overlap: {len(hc & hp)}")
+    return calib_rows, probe_rows
+
+
+def verify_frozen_repro(repro_path, frozen_path):
+    """Byte-for-byte check of a v1 reconstruction against the frozen set.
+
+    Byte-exact is the bar (same shards, seed, filters, rng stream); a matching
+    domain tally or row multiset is necessary but NOT sufficient — report
+    exactly what diverged so drift is diagnosable, never waved through.
+    """
+    repro = Path(repro_path).read_bytes()
+    frozen = Path(frozen_path).read_bytes()
+    if repro == frozen:
+        print(f"V1_REPRODUCED byte-exact ({len(repro):,} bytes) == {frozen_path}")
+        return
+    rl, fl = repro.decode().splitlines(), frozen.decode().splitlines()
+    print(f"V1_REPRO_DRIFT: lines {len(rl)} vs frozen {len(fl)}")
+    multiset_ok = sorted(rl) == sorted(fl)
+    print(f"  row multiset identical (order-only drift): {multiset_ok}")
+    if not multiset_ok:
+        only_r = {row_hash(json.loads(l)["conversations"]) for l in rl} - \
+                 {row_hash(json.loads(l)["conversations"]) for l in fl}
+        print(f"  rows in repro but not frozen: {len(only_r)}")
+    for i, (a, b) in enumerate(zip(rl, fl)):
+        if a != b:
+            print(f"  first divergence at line {i + 1}")
+            break
+    raise SystemExit(1)
+
+
 def belebele_rows(lang, need, rng, banned, raw_dir):
     """ML probe rows from facebook/belebele (fetched on first use)."""
     dest = raw_dir / f"belebele_{lang}.parquet"
@@ -372,7 +450,8 @@ def build_guard(args, rng, banned):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--mode", choices=["calib", "probe", "guard"], required=True)
+    ap.add_argument("--mode", choices=["calib", "probe", "guard", "v1-repro"],
+                    required=True)
     ap.add_argument("--out", required=True, help="output jsonl path")
     ap.add_argument("--pool", default="data-raw/cascade",
                     help="dir with Nemotron-Cascade-2 parquet shards")
@@ -406,14 +485,23 @@ def main():
     args.raw_dir = raw if raw.is_absolute() else ROOT / raw
 
     rng = random.Random(args.seed)
-    banned = banned_hashes(args.exclude)
-    # `banned` is mutated during the build (selected rows are added so later
-    # subsets can't re-pick them) — snapshot the frozen+excludes hashes now;
-    # the output must be disjoint from THOSE, not from itself.
-    pre_banned = set(banned)
+    if args.mode == "v1-repro":
+        # Historical reconstruction: v1 was built before any frozen set existed
+        # — no exclusions, or exact reconstruction is impossible by design.
+        banned = set()
+        pre_banned = set()
+    else:
+        banned = banned_hashes(args.exclude)
+        # `banned` is mutated during the build (selected rows are added so later
+        # subsets can't re-pick them) — snapshot the frozen+excludes hashes now;
+        # the output must be disjoint from THOSE, not from itself.
+        pre_banned = set(banned)
 
+    probe_rows = None
     if args.mode == "calib":
         rows = build_calib(args, rng, banned)
+    elif args.mode == "v1-repro":
+        rows, probe_rows = reproduce_v1(args, rng)
     elif args.mode == "probe":
         rows = build_probe(args, rng, banned)
     else:
@@ -435,6 +523,15 @@ def main():
         for r in rows:
             f.write(json.dumps(r) + "\n")
 
+    # v1-repro: the co-built probe companion (day-0 ruler was part of the same
+    # rng stream — writing it here keeps the pair together)
+    if probe_rows is not None:
+        probe_path = out.parent / (out.stem + "-probe.jsonl")
+        with open(probe_path, "w") as f:
+            for r in probe_rows:
+                f.write(json.dumps(r) + "\n")
+        print(f"probe companion: {len(probe_rows)} rows -> {probe_path}")
+
     # provenance sidecar: every upstream file this build read, hash-pinned;
     # output path normalized the same way as source paths (no host leakage)
     sidecar = out.with_suffix("").with_name(out.name + ".sources.json")
@@ -452,6 +549,15 @@ def main():
     print("domains:", dict(Counter(
         "ML" if (r.get("domain") or "").startswith("belebele") else r.get("domain")
         for r in rows)))
+
+    # v1-repro is a reconstruction CLAIM — it is not done until the claim is
+    # checked: byte-exact against the frozen set, or nonzero exit
+    if args.mode == "v1-repro":
+        frozen = DATA / "calib-cascade-v1.jsonl"
+        if frozen.exists():
+            verify_frozen_repro(out, frozen)
+        else:
+            print(f"WARNING: {frozen} missing — reconstruction NOT verified")
 
 
 if __name__ == "__main__":
