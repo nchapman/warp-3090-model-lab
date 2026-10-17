@@ -177,19 +177,26 @@ locally `quants/Qwen3.6-35B-A3B-W4A16-GPTQ` (21G, 12 files, sha256sum -c OK).
 Card live: nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ (sha256 in card; shards
 3fa42b79…, 1631b73b…, 68b2cabe…). Probe numbers pending (see below).
 
-**Ornith-1.5-35B-A3B-W4A16-GPTQ — IN PROGRESS as of 16:10Z 10-17, ETA ~1h.**
-Same recipe, run `quant-35b-ornith.20261017T114909Z.13535`, started 11:49Z.
-At 16:02Z: 37/41 subgraphs, calibrating. Pace ~7 min/subgraph — IDENTICAL
-to Qwen (the two are the same architecture: `qwen3_5_moe`
-Qwen3_5MoeForConditionalGeneration, hybrid gated-delta-rule + attention; both
-logs show the same benign `chunk_gated_delta_rule` reference-fallback warning
-because flash-linear-attention isn't in the pod image; it costs both runs
-equally and did not separate them).
+**MISSION COMPLETE 17:05Z 10-17.** Both 35B MoE W4A16 GPTQ quants shipped.
 
-**CORRECTION (16:10Z).** An earlier version of this section reported the
-Ornith run as 25h+ old with 5-9h "monster subgraphs" and $360-490 spend —
-all fiction caused by a date-rollover error in the agent's time labels,
-compounded into fabricated per-subgraph durations. Ground truth (ps etime,
-file birth times, pod createdAt, both machine clocks): run is hours old,
-not days; pod 9.75h x $7.99/h ~= $78 spent; projected total ~$100-110 —
-on the original estimate. Subgraph pace was never anomalous.
+| | Qwen3.6-35B-A3B | Ornith-1.5-35B-A3B |
+|---|---|---|
+| run | quant-35b.20261017T065050Z.2036 | quant-35b-ornith.20261017T114909Z.13535 |
+| wall | 4h55m (06:50-11:45Z) | 4h48m (11:49-16:37Z) |
+| probe mean KL | 0.269 | 0.304 |
+| probe weighted KL | 0.111 | 0.233 |
+| probe p99.9 KL | 18.06 | 8.24 |
+| probe dPPL | +1.33% (NLL 1.3895->1.4080) | -3.04% (NLL 2.3815->2.3090) |
+| artifact | quants/Qwen3.6-35B-A3B-W4A16-GPTQ (12 files, sha OK) | quants/Ornith-1.5-35B-A3B-W4A16-GPTQ (12 files, 21G, sha OK) |
+| card | huggingface.co/nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ | huggingface.co/nchapman/Ornith-1.5-35B-A3B-W4A16-GPTQ |
+
+Same recipe both: W4A16 GPTQ g128 oneshot, cascade-v1 999x4096 calib
+(sha-pinned), snapshots Qwen 995ad96eacd9 / Ornith 10fbf86fed7e. Ornith
+verify: 3 shards 20.68 GiB, compressed-tensors pack-quantized, vision tower
+bf16-untouched (explicit ignore list), MTP tensors 785/785 copied, smoke
+generate OK. Probe set: data/probe-v4.jsonl, 378 rows, KL_ROWS_CAP=400.
+Same architecture both (qwen3_5_moe hybrid incl. gated-delta-rule; both logs
+show the identical benign FLA-fallback warning) and identical ~7 min/subgraph
+pace — 41 subgraphs each. Cost: pod 06:20-17:00Z = 10.7h x $7.99/h
+~= **$85 total for both**. Pod se3u5xacjmhp7j terminated 17:02Z (204) after
+both artifacts verified on local disk.
