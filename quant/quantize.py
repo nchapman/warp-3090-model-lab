@@ -111,10 +111,27 @@ def load_ultrachat(num_samples):
     return [m for m in ds["messages"][:num_samples]]
 
 
+def load_perfectblend(num_samples):
+    # ecosystem-default blend (llmcompressor ships a first-class class for it;
+    # here we load it through the same role-mapped path as hermes so the ONLY
+    # variable vs cascade-v1 is the data source). ShareGPT schema: from/value.
+    role_map = {"human": "user", "gpt": "assistant", "system": "system"}
+    ds = load_dataset("mlabonne/open-perfectblend", split="train").shuffle(
+        seed=42
+    )
+    msgs = [
+        [{"role": role_map.get(m["from"], m["from"]), "content": m["value"]}
+         for m in conv]
+        for conv in ds["conversations"][:num_samples]
+    ]
+    return msgs
+
+
 NAMED_CALIBRATIONS = {
     "cyankiwi": load_cyankiwi,
     "hermes": load_hermes,
     "ultrachat": load_ultrachat,
+    "perfectblend": load_perfectblend,
 }
 
 
@@ -291,7 +308,7 @@ def main():
                         default="gptq")
     parser.add_argument("--calib", default="data/calib-cascade-v1.jsonl",
                         help="calibration jsonl path or comparison-set name "
-                             "(cyankiwi|hermes|ultrachat)")
+                             "(cyankiwi|hermes|ultrachat|perfectblend)")
     parser.add_argument("--num-samples", type=int, default=999,
                         help="champion regime is 999; library default is 512")
     parser.add_argument("--max-seq-length", type=int, default=MAX_SEQUENCE_LENGTH,

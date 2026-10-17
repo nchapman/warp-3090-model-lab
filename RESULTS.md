@@ -36,6 +36,15 @@ cascade-v1 **0.1087** · cascade-v2 0.1120 · duo AWQ+GPTQ @512×384 0.1209
 (loses — agentic domains starved at 384 tokens). GPTQ beats the library-default
 512×384 budget at 999×4096 everywhere it was measured.
 
+PerfectBlend ablation (4B, 2026-10-17, GB10): the ecosystem-default blend
+(mlabonne/open-perfectblend, same 999×4096 regime, role-mapped through the
+model template) scored **0.1432** vs cascade-v1 0.1087 (+32%) — worst of all
+GPTQ one-shots, re-anchored same-day (champion reproduces 0.1087 exactly on
+this box). Uniformly worse, not just tails: chat 0.066/0.044, math
+0.056/0.036, conv_agent 2.13/1.60. Only dPPL is close (+3.16 vs +3.35).
+Verdict: keep cascade-v1; the general blend's missing agentic/tool coverage
+is measurable, and nobody ablates this because nobody measures.
+
 ## Drafters (DFlash2, quant-aligned, 4B)
 
 Scaling ladder (fixed chat-heavy cascade blend, block 16, interval-weighted τ
