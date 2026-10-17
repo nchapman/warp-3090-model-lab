@@ -106,9 +106,12 @@ reconstructed from history.
 - Shape tooling: `drafter/reshape_tokens.py` (prefix/merged/first/short),
 `prep_dataset.py --loss-mode all|last --max-tokens N` (drop cap).
 
-**Eval.** `data/ladder-20.jsonl` is GENERAL CHAT ONLY — every τ ever
-quoted (all historical numbers included) is general-chat τ. No
-code/agentic/long eval exists. Don't claim deployment relevance without one.
+**Eval.** Two instruments. `data/ladder-20.jsonl` is GENERAL CHAT ONLY
+— ladder-quoted τ (all historical numbers included) is general-chat τ.
+`drafter/bench_subsets.sh` = multi-domain profile (RedHatAI
+speculator_benchmarks, 9 subsets / 924 prompts, pin 2ae86af, t=0 default
+— champion weighted 4.16 vs MTP 3.26, wins 8/9). Long-context eval: none
+yet. Don't claim deployment relevance without one.
 
 **τ bars and the dead-zone map (τ @ t=0.7 n=4 unless noted).** These are
 the numbers a run answers to — external references, not internal history:
