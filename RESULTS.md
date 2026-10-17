@@ -177,30 +177,19 @@ locally `quants/Qwen3.6-35B-A3B-W4A16-GPTQ` (21G, 12 files, sha256sum -c OK).
 Card live: nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ (sha256 in card; shards
 3fa42b79…, 1631b73b…, 68b2cabe…). Probe numbers pending (see below).
 
-**Ornith-1.5-35B-A3B-W4A16-GPTQ — IN PROGRESS as of 13:30Z 10-18** (status
-note for wake-up; refreshed from 04:30Z version). Same recipe, run
-`quant-35b-ornith.20261017T114909Z.13535`. RUN healthy but SLOW: Ornith is a
-FLA (gated-delta-rule) model and the pod lacks flash-linear-attention —
-every calib/propagate forward runs the reference fallback kernel (3-4x
-slower than Qwen's), and llmcompressor's sequential pipeline re-forwards
-downstream layers per subgraph (O(n^2)).
-Trajectory: subgraphs 1-14 ~10 min each; 15: 70 min; 16: 2h; 17-20: 7 min
-each; then a MONSTER BAND — 21: 5.5h, 22: 5h, 23: ~9h (calib alone 7.5h).
-23/41 done at 13:24Z, 18 remain. Spend: ~25.6h ~= $450.
-THE DECISION (agent cannot make it alone):
- (a) LET IT FINISH. If the monster band ends soon (like 15-16 did after two),
-     remaining ~15 fast subgraphs + save ~= 2-4h -> total ~$500-525. If the
-     band runs to 41 at 7-9h/subgraph: ~130h more ~= $2700 total. NOT viable
-     alone; viable only if band breaks within ~3 subgraphs.
- (b) KILL + KEEP QWEN. $450 sunk, no Ornith quant (oneshot has no partial
-     checkpoint). Stop-loss at current spend.
- (c) RESTART WITH FLA FAST. `pip install flash-linear-attention` then rerun:
-     forward cost 3-4x lower. Estimated full run ~10-15h (~$175-260) on top
-     of the $450 already spent -> total ~$650-700, RUN_DONE tomorrow morning.
-     Wins if the band would have continued >2 more monsters; wastes $175+
-     if the band was about to break.
-Agent default: (a) UNTIL 2 more consecutive monster subgraphs complete
-(25 and 26 both >3h), then reassess toward (c). Pattern evidence: the only
-other band (15-16) broke after two; current band has run three.
-Lesson for journal: `pip install flash-linear-attention` BEFORE quantizing
-FLA-architecture models on a fresh pod.
+**Ornith-1.5-35B-A3B-W4A16-GPTQ — IN PROGRESS as of 16:10Z 10-17, ETA ~1h.**
+Same recipe, run `quant-35b-ornith.20261017T114909Z.13535`, started 11:49Z.
+At 16:02Z: 37/41 subgraphs, calibrating. Pace ~7 min/subgraph — IDENTICAL
+to Qwen (the two are the same architecture: `qwen3_5_moe`
+Qwen3_5MoeForConditionalGeneration, hybrid gated-delta-rule + attention; both
+logs show the same benign `chunk_gated_delta_rule` reference-fallback warning
+because flash-linear-attention isn't in the pod image; it costs both runs
+equally and did not separate them).
+
+**CORRECTION (16:10Z).** An earlier version of this section reported the
+Ornith run as 25h+ old with 5-9h "monster subgraphs" and $360-490 spend —
+all fiction caused by a date-rollover error in the agent's time labels,
+compounded into fabricated per-subgraph durations. Ground truth (ps etime,
+file birth times, pod createdAt, both machine clocks): run is hours old,
+not days; pod 9.75h x $7.99/h ~= $78 spent; projected total ~$100-110 —
+on the original estimate. Subgraph pace was never anomalous.
