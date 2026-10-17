@@ -38,3 +38,8 @@ data/smoke*
 data/opd_dryrun/
 data/opd_boundaries/
 data/opd_replay_*/
+
+# 528MB frozen pool: sha-pinned in data/MANIFEST.sha256, dual-homed on the HF
+# mirror (nchapman/warp-3090-quant-lab-frozen-data) — restore with a mirror
+# pull or from a sibling checkout, never commit the blob
+data/context_pool.jsonl
