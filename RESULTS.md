@@ -18,6 +18,19 @@ not comparable between 3.5 and 3.8 releases — keep tables per-model.**
 † cross-generation (3.8); its conv_agent KL wall (2.20) is higher than 3.5-4B's
 (1.60) — attribution is generation gap, not size.
 
+35B MoE generation (Qwen3.6 / Ornith-1.5, B200 pod 10-17, same recipe;
+separate table per cross-generation convention):
+
+| model | weightedKL | probe-v4 dPPL | tail p99.9 KL | artifact |
+|---|---|---|---|---|
+| Qwen3.6-35B-A3B | **0.111** | +1.33% | 18.06 | `nchapman/Qwen3.6-35B-A3B-W4A16-GPTQ` |
+| Ornith-1.5-35B-A3B | **0.233** | −3.04% | 8.24 | `nchapman/Ornith-1.5-35B-A3B-W4A16-GPTQ` |
+
+Both in family band on chat/math (where blend weight lives); both carry the
+agentic-domain tail (conv_agent 1.55/1.33, swe 0.85/1.26). Ornith's 2x
+weightedKL is mid-range domains + weaker base geometry (base NLL 2.38 vs
+1.39). Guard-set dPPL unmeasured (pod terminated; >90GB doesn't fit GB10).
+
 Calibration ablations (4B, probe-v4): cyankiwi 0.1340 · ncblend 0.1273 ·
 cascade-v1 **0.1087** · cascade-v2 0.1120 · duo AWQ+GPTQ @512×384 0.1209
 (loses — agentic domains starved at 384 tokens). GPTQ beats the library-default
