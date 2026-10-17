@@ -10,3 +10,16 @@ torch==2.13.0
 transformers==5.16.1
 datasets==5.0.1
 safetensors==0.8.0
+
+# Capability battery (quant/capability_battery.sh) — lm-eval + task deps.
+# 0.4.13 is the patch target (THINK_STRIP in models/utils.py); extras are NOT
+# covered by lm_eval's own extras: ifeval needs langdetect+immutabledict,
+# minerva needs math-verify+latex2sympy2_extended, and lm-eval hard-asserts
+# antlr4-python3-runtime==4.11 (4.13 passes `import antlr4` but fails the
+# version assert — verified on the A100 pod 2026-10-17).
+lm_eval==0.4.13
+langdetect==1.0.9
+immutabledict==4.3.1
+math-verify==0.9.0
+latex2sympy2_extended==1.11.0
+antlr4-python3-runtime==4.11
