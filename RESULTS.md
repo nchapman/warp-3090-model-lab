@@ -82,6 +82,43 @@ contender. Per-row dump (texts, prefixes) at `slices/traj-champ4b-rows.jsonl`
 the champion's stamped SERVING_PARAMS sampling flags (`do_sample=False`),
 confirmed by the harness's invalid-generation-flags warning in the run log.
 
+### Capability battery — lm-eval cliff detection (2026-10-17/18, GB10, greedy t=0)
+
+`quant/capability_battery.sh battery-champion` — 4B champion quant
+(nchapman/Qwen3.5-4B-W4A16-GPTQ) vs bf16 base (Qwen/Qwen3.5-4B), both
+served via vLLM, lm-eval `--gen_kwargs temperature=0`, paired per-doc
+bootstrap CI, cliff threshold 5pt. THINK_STRIP patch applied (strips think
+blocks before scoring). Full run, no doc cap. Run:
+`runs/battery-champion.20261017T234216Z.12088` (report.txt +
+battery-report.json + both sides' raw lm-eval JSONs).
+
+| task | metric | n | base | quant | Δpt | 95% CI | cliff |
+|---|---|---|---|---|---|---|---|
+| ifeval | prompt_level_strict_acc | 541 | 47.0 | 39.0 | **-7.9** | **[-11.5, -4.4]** | **YES** |
+| gpqa_diamond_cot_zeroshot | exact_match (flexible) | 198 | 47.5 | 41.9 | -5.6 | [-13.6, +2.5] | |
+| humaneval_plus | pass@1 | 164 | 53.7 | 50.0 | -3.7 | [-9.1, +1.8] | |
+| mbpp_plus | pass_at_1 | 378 | 47.1 | 47.1 | +0.0 | [-5.8, +5.8] | |
+| minerva_math500 | exact_match | 500 | 24.8 | 23.6 | -1.2 | [-5.6, +3.2] | |
+
+Findings: **(1) ifeval is the only cliff — CI entirely below zero** — and
+it corroborates the traj-v1 agentic cliff from an independent single-turn
+instrument. **(2) Math, code, and knowledge are clean**: mbpp exactly 0.0,
+minerva -1.2, humaneval -3.7 (all CI-over-zero). W4A16 GPTQ damage
+concentrates in instruction-adherence regimes, not capabilities. **(3)
+Cross-instrument note**: traj-v1 IF rollouts were the *healthiest*
+(agree@1 0.96 — rigid openings dominate 32 tokens) while battery ifeval
+full-response strict is the *worst* cliff. Both are right: the quant
+tracks the base through rigid openings, then full-response adherence
+degrades past them. Short-rollout agreement ≠ full-response adherence —
+compare directions across instruments, never averages (standing doctrine).
+**(4) gpqa -5.6 is suggestive but n=198-noisy** (CI spans zero; small-n
+single-draw — treat as unproven). Tooling pins that this battery needs:
+lm_eval==0.4.13 + antlr4==4.11 (THINK_STRIP patch is layout-coupled to the
+lm-eval source version; a stale-but-importable lm_eval runs unpatched and
+silently keeps think blocks). Metric/filter provenance: lm-eval logs the
+same bare metric under multiple filters — the report pins the filter
+(e.g. `exact_match,flexible-extract`), else last-logged wins by luck.
+
 ## Drafters (DFlash2, quant-aligned, 4B)
 
 Scaling ladder (fixed chat-heavy cascade blend, block 16, interval-weighted τ
