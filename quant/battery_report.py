@@ -97,6 +97,7 @@ def load_samples(side_dir, task, key):
                 paths.append(hit)
     rows = {}
     unresolved = 0
+    dupes = 0
     bad = 0
     stem = key.split(",")[0]
     suffix = key.split(",", 1)[1] if "," in key else None
@@ -126,11 +127,13 @@ def load_samples(side_dir, task, key):
                     bad += 1  # truncated tail etc. — degrade one doc, not the report
                     continue
                 if rec["doc_id"] in rows:
-                    unresolved += 1  # duplicate doc for the same filter — ambiguous
+                    dupes += 1  # duplicate doc for the same filter — ambiguous
                     continue
                 rows[rec["doc_id"]] = val
     if bad:
         print(f"  ({task}: skipped {bad} malformed sample records)", file=sys.stderr)
+    if dupes:
+        print(f"  ({task}: ignored {dupes} duplicate doc_id records)", file=sys.stderr)
     if unresolved:
         print(f"  ({task}: {unresolved} sample records lack an unambiguous "
               f"'{key.split(',')[0]}' field)", file=sys.stderr)
@@ -179,6 +182,11 @@ def main():
         if kb is None or kq is None or kb != kq:
             print(f"{task:34s} (unresolvable metric — skipped; base key: {kb}, quant key: {kq})")
             continue
+        # a pinned filter candidate that didn't win means the report is
+        # about to run on some OTHER filter — say so instead of going quiet
+        pinned = next((c for c in TASK_METRICS.get(task, []) if "," in c), None)
+        if pinned and kb != pinned:
+            print(f"  ({task}: pinned '{pinned}' absent — using '{kb}')", file=sys.stderr)
         b, q = base_res[task][kb], quant_res[task][kb]
         delta = (q - b) * 100.0
 
