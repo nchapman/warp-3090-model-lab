@@ -207,7 +207,7 @@ def main():
               f"{b * 100:6.1f} {q * 100:6.1f} {delta:+6.1f} {ci:>17s} "
               f"{'YES' if cliff else ''}")
         report["tasks"][task] = {
-            "metric": name, "n_paired": len(common),
+            "metric": name, "metric_key": kb, "n_paired": len(common),
             "base": b, "quant": q, "delta_pt": delta,
             "ci_lo_pt": lo, "ci_hi_pt": hi, "cliff": cliff,
         }

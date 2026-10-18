@@ -84,7 +84,7 @@ SSH "cd $REPO_DIR/data && sha256sum -c MANIFEST.sha256 >/dev/null \
      || { echo 'FROZEN DATA DRIFT — do not run campaigns'; exit 1; }"
 
 stage "venv"
-SSH "cd $REPO_DIR && { .venv-dflash/bin/python -c 'import torch, speculators, vllm, lm_eval, langdetect, math_verify' \
+SSH "cd $REPO_DIR && { .venv-dflash/bin/python -c 'import torch, speculators, vllm, lm_eval, langdetect, immutabledict, math_verify, latex2sympy2_extended; from importlib.metadata import version; assert version(\"antlr4-python3-runtime\").startswith(\"4.11\")' \
         2>/dev/null && echo 'venv already importable — skipping pip'; } \
      || { python3 -m venv .venv-dflash \
           && .venv-dflash/bin/pip install -q -U pip \
