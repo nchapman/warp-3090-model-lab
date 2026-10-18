@@ -82,7 +82,13 @@ contender. Per-row dump (texts, prefixes) at `slices/traj-champ4b-rows.jsonl`
 the champion's stamped SERVING_PARAMS sampling flags (`do_sample=False`),
 confirmed by the harness's invalid-generation-flags warning in the run log.
 
-### Capability battery — lm-eval cliff detection (2026-10-17/18, GB10, greedy t=0)
+### Capability battery — lm-eval cliff detection (2026-10-17/18, RunPod A100 SXM 80GB quant-lab-a100, greedy t=0)
+
+> Provenance corrected 2026-10-18: run logs carry `/root/.cache/huggingface`
+> paths — this battery ran on the A100 pod, not GB10 (mis-labeled when the
+> synced run dir was written up). Timing matters operationally: 23 min/side
+> there vs ~6.5 h/side on GB10 (bandwidth-starved, 13.6 s/prompt measured
+> 2026-10-18) — capability batteries are pod jobs.
 
 `quant/capability_battery.sh battery-champion` — 4B champion quant
 (nchapman/Qwen3.5-4B-W4A16-GPTQ) vs bf16 base (Qwen/Qwen3.5-4B), both
@@ -297,7 +303,7 @@ pace — 41 subgraphs each. Cost: pod 06:20-17:00Z = 10.7h x $7.99/h
 ~= **$85 total for both**. Pod se3u5xacjmhp7j terminated 17:02Z (204) after
 both artifacts verified on local disk.
 
-## GDN div-64 fix + calib-authorship A/B (2026-10-18, RunPod 5090 ark6gc32cp9j8t)
+## GDN div-64 fix + calib-authorship A/B (2026-10-18, RunPod A100 SXM 80GB quant-lab-a100 ark6gc32cp9j8t)
 
 **Root cause of the earlier GDN-div64 crashes: llama.cpp convert wrote
 GDN in_proj as ONE fused [fused_N, K] tensor; fused_N = 3168 not div-64
@@ -331,3 +337,135 @@ Four arms, probe-v4 (378 rows, base NLL 1.402), champion = control:
   while wrecking dPPL. KL alone under-ranks GDN damage; dPPL/NLL carry it.
 - Champion remains the shipped artifact (control, never re-quantized);
   authorship result is a calib-recipe finding for the NEXT ship.
+
+### Calib composition audit (2026-10-18, GB10 — what the 4096 window feeds GPTQ)
+
+Reading the data, not just the sha: contexts are byte-identical between
+v1 and qwenfinals (999/999 matched by context-hash; out-of-order writes
+had made a naive zip mis-align and look like rewritten prompts — join by
+hash, not line). Every final regenerated; both files are think-heavy by
+construction, so the A/B is a clean authorship delta, not a format delta:
+
+| | cascade-v1 | qwenfinals |
+|---|---|---|
+| finals with `<think>` | 923/999 (92%) | 998/999 (100%) |
+| think-share of final tokens | 81% | 83% |
+| final tokens (mean / p50) | 5,108 / 1,833 | 4,904 / 2,262 |
+
+What GPTQ actually sees (4096-token window, 120-row sample, tokens):
+
+| | context (shared) | think | answer | rows w/ >16 answer toks |
+|---|---|---|---|---|
+| v1 | 31% (796) | 52% (1,338) | 17% (447) | 70/120 |
+| qf | 31% (835) | 59% (1,620) | 10% (269) | 54/120 |
+
+- The authorship gain (+3.33 → +0.98 dPPL) is carried mostly by reasoning-
+  token statistics, with answer share shrinking 17→10% — "Qwen-authored
+  finals" is in practice "Qwen-authored reasoning". qf is the best probe
+  arm we have measured; the composition shift is its likely mechanism, not
+  a defect (the GGUF short-rows inversion is an instrument that cannot see
+  the reasoning regime — short-context, ≤2048 tok).
+- **Test for the release (characterization, not repair):** matched arms —
+  same Qwen-authored finals, think-stripped/capped vs as-is, answer-share
+  held constant. Directly measures whether reasoning-token hessian
+  coverage is what protects this hybrid arch (GDN state compounds over
+  length; think phase is the longest-horizon regime). No ecosystem calib
+  covers think tokens at all (imatrix: plain text; DSpark: ≤1024 prompts).
+- **Longer window lever:** regen finals are stored full-length (≤16,384) —
+  widening 4096→8192 is a rebuild flag on existing data, no re-spend.
+  Cost is sublinear in practice: only the ~quarter of rows over 4096 grow
+  (row p90 ≈ 14–17K), so ≈ +30–50% calib tokens; Hessians are K×K
+  (seq-len independent), memory flat. Probe MAX_LEN must widen in step
+  or we calibrate long and measure short (same blindness as GGUF).
+
+### Capability battery — gdnfix arms + champion cross-host control (2026-10-18, RunPod A100 SXM 80GB, greedy t=0)
+
+Same rig as the champion battery (humaneval_plus, mbpp_plus, ifeval,
+minerva_math500, gpqa_diamond; full n; think-strip; lm-eval 0.4.13;
+GPU_MEM_UTIL=0.9). All quant sides below ran on the SECOND A100 host
+(216.81.245.125; artifacts rsynced 30MB/s, md5-verified 20/20 vs local
+manifests — the exact probed artifacts, not rebuilds); base side = the
+champion battery's base raws (old pod). **Instrument control:** champion
+re-run on the new host reproduces its old-instance paired deltas to
+≤0.1pt on all five tasks — cross-host pairing validated, run-to-run
+variance negligible at these n.
+
+Δ vs base (pt, 95% CI):
+
+| task (n) | champion old pod | champion xhost | gdnfix-head | gdnfix-qf |
+|---|---|---|---|---|
+| gpqa (198) | −5.6 | −5.6 | −13.1 [−21.2,−5.1] ⚠️ | −7.1 [−15.2,+1.0] |
+| humaneval (164) | −3.7 | −3.7 | −4.3 | −3.7 |
+| ifeval (541) | −7.9 | −7.8 | **−13.7** [−17.6,−10.0] ⚠️ | **−14.6** [−18.3,−10.9] ⚠️ |
+| mbpp (378) | 0.0 | 0.0 | −3.2 | −1.1 |
+| math500 (500) | −1.2 | −1.2 | **+4.6** [−0.2,+9.4] | −3.8 [−8.6,+1.0] |
+
+- **Pristine GDN in_proj buys NO capability bump — it costs ~6pt of
+  ifeval.** Both gdnfix arms (different calibs, same patched quantize.py
+  with the GDN exclusion) lose ~6pt more IF than champion on both
+  instances' champion readings. The common factor is the exclusion
+  itself: mixed-precision error redistribution, not calib. The expected
+  "natural bump" measured −6pt instead.
+- **Probe wins do not carry to capability.** qf = best qNLL ever measured
+  (+0.98 dPPL) yet sits at the worst ifeval cell of the three; head's
+  only positive anywhere is math500 +4.6 (CI borderline). Probe↔battery
+  ordering is instrument-specific — record both, trust neither alone.
+- **ifeval cliff is recipe-class:** champion loses 7.8–7.9pt at W4A16
+  regardless of host; the GDN exclusion deepens it to ~14. Next-ship
+  implication: keep in_proj IN the quantization (fused, div-64-safe) and
+  spend bits instead — W8 on sensitive modules / higher group count —
+  rather than excluding modules.
+- **Champion stays the shipped artifact** (probe control, battery leader
+  on 4/5 cells). Artifacts local: ~/Code/llm-compressor (gdnfix dirs
+  + .md5 manifests); paired reports: runs/battery-*/paired-report.json
+  (gdnfix-head.20261018T221434Z.3679, gdnfix-qwenfinals.20261018T224435Z.16780,
+  champion-xhost.20261018T231336Z.26704).
+
+## GGUF local showdown (2026-10-18, GB10, llama.cpp b-cuda)
+
+Question: how do our W4A16 artifacts fare vs unsloth GGUF quants in
+llama.cpp-land? Instruments (all local, `-c 16384 -ngl 99`, texts
+rendered from data/probe-v4.jsonl via chat template):
+
+- **Aggregate all-domains ppl is INVALID on this hybrid arch.** Exact-
+  weights f16 scores WORSE than every quant (4.7150 > Q8 4.6708 > champion-
+  dequant 4.5404 > UD-Q4_K_XL 4.5136 > Q4_K_M 4.3206) — a length-dependent
+  drift in the exact-weights path masked by quant shrinkage. Never rank
+  quants on aggregate llama.cpp ppl here.
+- **Short-rows (194 rows ≤2048 tok) is the honest instrument:**
+
+| file | PPL | Δ vs f16 |
+|---|---|---|
+| base f16 | 3.5138 | — |
+| Q4_K_M (imatrix) | 3.5319 | +0.51% |
+| UD-Q4_K_XL (imatrix) | 3.5372 | +0.67% |
+| gdnfix-head dequant | 3.5871 | +2.09% |
+| champion dequant | 3.5913 | +2.20% |
+| gdnfix-qwenfinals dequant | 3.5982 | +2.40% |
+
+Findings: **(1)** unsloth's "quality-max" UD blend is a statistical tie
+with plain Q4_K_M on short rows — the imatrix+K-quant base does the work,
+not the dynamic blend. **(2)** our W4A16-g128-symmetric carries a ~+2%
+ppl floor in llama.cpp regardless of calib arm — that's recipe-class vs
+imatrix'd K-quants, not the GDN bug. **(3)** the GDN fix is GGUF-neutral
+on short rows (+2.20→+2.09): GDN damage compounds with length, which
+short rows dilute and the aggregate instrument drowns — probe (teacher-
+forced, reference runtime) remains the instrument for GDN. **(4)**
+qwenfinals inverts across instruments (probe-best +0.98 dPPL, GGUF
++2.40 worst): see composition audit — a think-heavy calib optimizes the
+reasoning regime the short instrument cannot see. **(5)** matching UD
+in GGUF-land means shipping our own imatrix'd K-quant — proper-release
+scope, not a W4A16 patch.
+
+Forensics that got here (kept to prevent re-derivation): recurrent_layers
+GGUF field is inert (loader never reads it); attn_norm +1.0 shift is
+llama.cpp convention in BOTH files; big weights bit-exact vs HF; GPU==CPU
+ppl identical (2.6324) → no kernel bug; anomaly is length-dependent in
+the exact-weights path. Champion W4A16→f16 dequant: ~/gguf-eval/
+dequant_champion.py (two-pass caches; unpack int32→4bit × g128 symmetric;
+faithful to +0.5% tensor std vs base).
+
+Ops notes: dequantized-W4A16 GGUFs built via convert_hf_to_gguf.py
+(--outtype f16 --no-mtp) on the f16 HF render. GB10 doctrine addendum:
+battery-grade vLLM serving and llama.cpp sweeps serialize on this box
+(measured 18.5 vs 13.6 s/prompt contended vs solo).
