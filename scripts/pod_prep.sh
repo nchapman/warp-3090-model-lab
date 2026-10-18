@@ -32,9 +32,14 @@ MODELS=${MODELS:-"Qwen/Qwen3.5-4B nchapman/Qwen3.5-4B-W4A16-GPTQ nchapman/Qwen3.
 SSH() { ssh -p "$PORT" -i "$KEY" -o LogLevel=ERROR "$DEST" "$@"; }
 stage() { printf '\n== %s (%s)\n' "$1" "$(date +%H:%M:%S)"; }
 
-# Everything here is disposable/testbed output or machine-local: venvs, the
-# pod's own run registry, git objects, caches, 0.8B smoke artifacts (217GB!),
-# old eval scratch dirs, and local quant dirs (models come from the Hub).
+# Everything here is either disposable output, machine-local, or shipped by a
+# different channel: venvs, the pod's run registry, git objects, caches,
+# 0.8B smoke artifacts (217GB!), old eval scratch, local quant dirs (models
+# come from the Hub), and the raw cascade pool (data-raw/, local-only input
+# to slice_convs.py / build_calib.py — too big for the sync guard).
+# NOTE: slices/ and draft_init/ are EXCLUDED here too — the drafter flow's
+# payload ships via `bash pod.sh push`, NOT via pod_prep sync; the verify
+# stage below warns when they are missing.
 EXCLUDES=(.venv-* runs .git __pycache__ .pi
           .pytest_cache .mypy_cache smoke 'eval_*' 'Qwen3.5-*-GPTQ*'
           '*.pyc' .DS_Store quants data-raw slices)
@@ -82,6 +87,11 @@ stage "verify"
 SSH "cd $REPO_DIR/data && sha256sum -c MANIFEST.sha256 >/dev/null \
      && echo 'frozen data manifest OK' \
      || { echo 'FROZEN DATA DRIFT — do not run campaigns'; exit 1; }"
+# slices/ is pod_prep-excluded (size guard) and pod.sh push is its channel —
+# flag its absence so a drafter pod doesn't discover the gap mid-run.
+# draft_init rides in the same tar; check both.
+SSH "cd $REPO_DIR && for d in slices draft_init; do \
+       [ -e \"\$d\" ] || echo \"  WARN: \$d/ absent — drafter flow needs it; run slice_convs/bootstrap_draft locally and 'bash pod.sh push'\"; done"
 
 stage "venv"
 SSH "cd $REPO_DIR && { .venv-dflash/bin/python -c 'import torch, speculators, vllm, lm_eval, langdetect, immutabledict, math_verify, latex2sympy2_extended; from importlib.metadata import version; assert version(\"lm_eval\") == \"0.4.13\"; assert version(\"antlr4-python3-runtime\").startswith(\"4.11\")' \
