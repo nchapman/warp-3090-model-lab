@@ -296,3 +296,38 @@ show the identical benign FLA-fallback warning) and identical ~7 min/subgraph
 pace — 41 subgraphs each. Cost: pod 06:20-17:00Z = 10.7h x $7.99/h
 ~= **$85 total for both**. Pod se3u5xacjmhp7j terminated 17:02Z (204) after
 both artifacts verified on local disk.
+
+## GDN div-64 fix + calib-authorship A/B (2026-10-18, RunPod 5090 ark6gc32cp9j8t)
+
+**Root cause of the earlier GDN-div64 crashes: llama.cpp convert wrote
+GDN in_proj as ONE fused [fused_N, K] tensor; fused_N = 3168 not div-64
+→ llmcompressor group axis misaligned → per-group Hessian inversion
+exploded (early layers dominated; conv_agent dppl +1.1%).** Fix =
+`_gptq_ignore`-style module ignore for fused GDN in_proj in
+quant/quantize.py build_recipe, letting the GDN keepouts cover it.
+Both post-fix runs receipt `assert_packed_div64: OK` and the quantized
+state_dict is per-group verified. Added `assert_preflight_div64` guard
+to quantize.py main() (logs `PREFLIGHT_DIV64_OK`; mock-tested both
+sides: N=2032 caught, N=2048 passes) — synced to pod.
+
+Four arms, probe-v4 (378 rows, base NLL 1.402), champion = control:
+
+| arm | mean KL | dPPL | qNLL |
+|---|---|---|---|
+| champion (cascade-v1, fused-GDN skip) | 0.1133 | +3.33% | 1.4487 |
+| win-tail (top-25% windows) | 0.1170 | +1.79% | 1.4271 |
+| **gdnfix-head (cascade-v1, author=head)** | 0.1170 | **+2.33%** | 1.4347 |
+| **gdnfix-qwenfinals (qwen-authored finals)** | 0.1171 | **+0.98%** | **1.4157** |
+
+- **Calib authorship halves dPPL at flat KL** (3.33 → 0.98%). Swe
+  15.8 → 11.9; conv_agent +1.1 → **−3.2** (quant now IMPROVES agent
+  domains). gdnfix-qwenfinals is the best qNLL we have measured on
+  probe-v4.
+- qwenfinals calib sha a4f04b7d06686478 (999 rows, Qwen-authored
+  finals, truncated 4096). Artifacts local:
+  ~/Code/llm-compressor/Qwen3.5-4B-W4A16-GPTQ-gdnfix-{head,qwenfinals}.
+- Oddity for the record: post-fix arms sit at KL 0.117x vs champion
+  0.1133 — the old fused-GDN skip damaged GDN layers LESS in KL terms
+  while wrecking dPPL. KL alone under-ranks GDN damage; dPPL/NLL carry it.
+- Champion remains the shipped artifact (control, never re-quantized);
+  authorship result is a calib-recipe finding for the NEXT ship.

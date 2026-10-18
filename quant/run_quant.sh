@@ -9,7 +9,7 @@ shift || true
 
 run_init "quant-$KEY"
 log_event QUANT_START "model=$KEY args=$*"
-VENV="$(dirname "$0")/../.venv-quant/bin/python3"
+VENV="${QUANT_PYTHON:-$(dirname "$0")/../.venv-quant/bin/python3}"
 
 # GB10 unified-memory hygiene (see mem_guard in runlib.sh + PAGE_CACHE_EVICT
 # in quantize.py): cap allocator fragmentation, fence the job so the desktop

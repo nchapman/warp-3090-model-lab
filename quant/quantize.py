@@ -16,6 +16,7 @@ data/) or a comparison-set name (cyankiwi | hermes | ultrachat, fetched from HF)
 
 import argparse
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -135,7 +136,8 @@ NAMED_CALIBRATIONS = {
 }
 
 
-def get_calibration_dataset(processor, calib, num_samples, max_seq_length):
+def get_calibration_dataset(processor, calib, num_samples, max_seq_length,
+                             window="head", seed=0):
     tokenizer = processor.tokenizer
     if calib in NAMED_CALIBRATIONS:
         conversations = NAMED_CALIBRATIONS[calib](num_samples)
@@ -152,6 +154,25 @@ def get_calibration_dataset(processor, calib, num_samples, max_seq_length):
             )
         except Exception:
             return {"input_ids": [], "attention_mask": []}
+        # window policy — WHERE the max_seq_length budget is cut from each
+        # row. head = right-truncation (champion behavior: first tokens).
+        # tail = left-truncation (last tokens — answers/end-of-trajectory).
+        # random = seeded uniform window (coverage control, order-independent
+        # per-row seed derived from the text hash).
+        if window == "random":
+            import hashlib
+            rng = random.Random(hashlib.sha256(text.encode()).digest()[:8]
+                                + seed.to_bytes(4, "big"))
+            enc = tokenizer(text, padding=False, truncation=False,
+                            add_special_tokens=False)
+            ids = enc["input_ids"]
+            if len(ids) > max_seq_length:
+                off = rng.randrange(0, len(ids) - max_seq_length + 1)
+                ids = ids[off:off + max_seq_length]
+                return {"input_ids": ids,
+                        "attention_mask": [1] * len(ids)}
+            return {"input_ids": ids, "attention_mask": enc["attention_mask"]}
+        tokenizer.truncation_side = "left" if window == "tail" else "right"
         return tokenizer(
             text,
             padding=False,
@@ -168,25 +189,27 @@ def get_calibration_dataset(processor, calib, num_samples, max_seq_length):
 
 
 def build_recipe(algo, moe=False):
-    # vision tower and lm_head stay BF16
-    ignore = ["lm_head", "re:.*visual.*"]
+    # vision tower, lm_head, and the GDN per-head gates stay BF16.
+    # in_proj_a/b are N=32 (dense 4B/9B) / N=48 (27B) — Marlin (SGLang)
+    # requires N % 64 == 0 on every packed tensor, so quantizing them breaks
+    # gptq_marlin_repack at load (found 2026-10-18 on the 27B); mainstream
+    # hybrid checkpoints leave them bf16. vLLM also fuses a+b into
+    # in_proj_ba — sub-kernel width. assert_packed_div64() guards exports.
+    ignore = ["lm_head", "re:.*visual.*",
+              r"re:.*linear_attn\.in_proj_a$",
+              r"re:.*linear_attn\.in_proj_b$"]
     # MoE-family (qwen3_5_moe) additions — verified empirically against
     # llmcompressor 0.14.1a (mini e2e): the router needs NO ignore entry
     # (Qwen3_5MoeTopKRouter is a raw nn.Parameter, never matched by
     # targets="Linear"; llmcompressor still materializes it into the
     # artifact's explicit ignore list automatically). Kept at BF16:
     # shared expert + its [1,2048] gate (always-active dense path; Intel
-    # AutoRound MoE recipe + palmfuture GPTQ precedent, ~180MB) and GDN
-    # in_proj_a/b ([32,2048]; vLLM fuses a+b into in_proj_ba — sub-kernel
-    # width; the library duo recipe ignores the same two).
-    moe_ignore = [
-        "re:.*shared_expert.*",
-        "re:.*linear_attn.in_proj_a$",
-        "re:.*linear_attn.in_proj_b$",
-    ]
+    # AutoRound MoE recipe + palmfuture GPTQ precedent, ~180MB).
+    moe_ignore = ["re:.*shared_expert.*"]
     ignore = ignore + (moe_ignore if moe else [])
     if algo == "gptq":
-        return GPTQModifier(targets="Linear", scheme="W4A16", ignore=ignore)
+        return GPTQModifier(targets="Linear", scheme="W4A16",
+                             ignore=_gptq_ignore(moe))
     if algo == "duo":
         # the library's canonical recipe verbatim (examples/quantization_w4a16/
         # qwen3_8_gptq_awq_example.py): AWQ pre-scaling + GPTQ, with the
@@ -299,6 +322,79 @@ def _kill_uma_warmup():
     _mu.caching_allocator_warmup = lambda *a, **k: None
 
 
+def assert_packed_div64(save_dir):
+    """Every packed weight must have logical N % 64 == 0 (Marlin floor).
+
+    Reads the logical shape from the weight_shape sidecar tensors llmcompressor
+    writes next to each weight_packed entry. Raises with the offender list so a
+    bad recipe cannot silently ship an SGLang-unloadable checkpoint.
+    """
+    from safetensors import safe_open
+    import glob
+    bad = []
+    for shard in sorted(glob.glob(f"{save_dir}/*.safetensors")):
+        with safe_open(shard, framework="pt") as f:
+            keys = set(f.keys())
+            for k in keys:
+                if not k.endswith("weight_shape"):
+                    continue
+                packed = k[: -len("weight_shape")] + "weight_packed"
+                if packed not in keys:
+                    continue
+                # weight_shape holds the LOGICAL [N, K] as a 2-elem tensor;
+                # read its VALUES (its own shape is just [2]).
+                logical = f.get_tensor(k)
+                n = int(logical[0])
+                if n % 64 != 0:
+                    bad.append(f"{k[:-len('_shape')]} N={n}")
+    if bad:
+        raise AssertionError(
+            f"packed tensors with N % 64 != 0 (Marlin/SGLang breakers): {bad}")
+    print(f"assert_packed_div64: OK ({save_dir})")
+
+
+def _gptq_ignore(moe=False):
+    """Canonical gptq-path ignore list (shared by build_recipe and the
+    pre-flight div64 check — keep in sync or the invariant drifts)."""
+    ignore = ["lm_head", "re:.*visual.*",
+              r"re:.*linear_attn\.in_proj_a$",
+              r"re:.*linear_attn\.in_proj_b$"]
+    return ignore + (["re:.*shared_expert.*"] if moe else [])
+
+
+def _matches_ignore(name, ignore):
+    """llmcompressor ignore semantics: exact string, or 're:'-prefixed regex."""
+    for pat in ignore:
+        if pat.startswith("re:"):
+            import re
+            if re.search(pat[3:], name):
+                return True
+        elif name == pat or name.endswith("." + pat):
+            return True
+    return False
+
+
+def assert_preflight_div64(model, moe=False):
+    """Fail BEFORE any GPU work: every Linear that will be GPTQ-packed must
+    have out_features % 64 == 0 (Marlin/SGLang kernel constraint), unless it
+    is on the ignore list (stays bf16, never packed). Same predicate as
+    assert_packed_div64() but computed pre-quantization — catches recipe
+    gaps in seconds instead of after a full quant run (2026-10-18: the
+    post-hoc guard cost a 46-min run to discover in_proj_a/b N=32)."""
+    import torch.nn as nn
+    ignore = _gptq_ignore(moe)
+    bad = [f"{name} N={m.out_features}"
+           for name, m in model.named_modules()
+           if isinstance(m, nn.Linear)
+           and m.out_features % 64 != 0
+           and not _matches_ignore(name, ignore)]
+    if bad:
+        raise AssertionError(
+            f"pre-flight: Linear layers with out_features % 64 != 0 that are "
+            f"NOT on the ignore list (would export as Marlin breakers): {bad}"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="4b",
@@ -314,6 +410,14 @@ def main():
     parser.add_argument("--max-seq-length", type=int, default=MAX_SEQUENCE_LENGTH,
                         help="calibration truncation length (library default "
                              "regime is 384)")
+    parser.add_argument("--window", choices=["head", "tail", "random"],
+                        default="head",
+                        help="where the truncation budget is cut from each "
+                             "calib row: head (first tokens, champion), tail "
+                             "(last tokens — answers, end-of-trajectory), "
+                             "random (seeded uniform window)")
+    parser.add_argument("--seed", type=int, default=0,
+                        help="seed for --window random (0 = fixed default)")
     parser.add_argument("--tag", default=None, help="output dir suffix")
     args = parser.parse_args()
     from lablog import log_event
@@ -351,6 +455,12 @@ def main():
     torch.cuda.empty_cache()
     log_event("CACHE_RECLAIMED", gb=round(reclaimed[0], 1))
 
+    # Marlin div-64 gate BEFORE any calibration/quantization GPU work —
+    # the post-save assert_packed_div64() is the export gate; this is the
+    # 1-second version of the same invariant (see its docstring).
+    assert_preflight_div64(model, moe=is_moe)
+    log_event("PREFLIGHT_DIV64_OK")
+
     # GB10 unified memory: the just-read base shards (~67GB for 35b) sit in
     # page cache NEXT TO the resident model copy — ~2x the model footprint
     # before any workspace, and pressure-driven reclaim has already once
@@ -366,7 +476,8 @@ def main():
     oneshot_kwargs = dict(
         model=model,
         dataset=get_calibration_dataset(
-            processor, args.calib, args.num_samples, args.max_seq_length
+            processor, args.calib, args.num_samples, args.max_seq_length,
+            window=args.window, seed=args.seed
         ),
         recipe=build_recipe(args.algo, moe=is_moe),
         max_seq_length=args.max_seq_length,
@@ -380,6 +491,7 @@ def main():
 
     model.save_pretrained(save_dir, save_compressed=True)
     processor.save_pretrained(save_dir)
+    assert_packed_div64(save_dir)
     # stamp canonical serving params into the artifact so `vllm serve` picks
     # them up as request defaults (models.SERVING_PARAMS = single source)
     import models as _m

@@ -43,3 +43,6 @@ data/opd_replay_*/
 # mirror (nchapman/warp-3090-quant-lab-frozen-data) — restore with a mirror
 # pull or from a sibling checkout, never commit the blob
 data/context_pool.jsonl
+
+# local secrets, never commit
+.env
