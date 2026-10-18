@@ -176,9 +176,13 @@ it request 70,214,746,112 bytes with 21.8GB free). The llmcompressor
 `load_quantizable_moe` wrap path linearizes per-layer (~1.6GB
 transients) and never mega-allocs — use it for 35B-class loads.
 
-**Models registry.** `models.py` keys: 4b (champion, taps_v4
-[2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24], local quant
-`Qwen3.5-0.8B-W4A16-GPTQ/`), 9b, 27b (taps UNVALIDATED).
+**Models registry.** `models.py` keys — six, not four: 4b (champion,
+taps_v4 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24],
+local quant `Qwen3.5-0.8B-W4A16-GPTQ/`), 9b, 27b (taps UNVALIDATED),
+35b (Qwen3.6-35B-A3B MoE, quant published 2026-10-17, no taps —
+drafter tooling untested), 35b-ornith (Ornith-1.5-35B-A3B,
+cross-lineage fork, quant published 2026-10-17, vision tower excluded
+from quant).
 4B artifact warning (2026-10-17): the champion calib-recipe artifact lives in
 ~/Code/llm-compressor/Qwen3.5-4B-W4A16-GPTQ-**cascade** (suffix REQUIRED);
 the unsuffixed dir there is an ablation-era leftover that ablations overwrote
