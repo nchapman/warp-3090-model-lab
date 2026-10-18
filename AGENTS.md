@@ -52,6 +52,11 @@ learned the hard way.
   inside (`calib-cascade-v1` = nvidia/Nemotron-Cascade-2-SFT-Data —
   source-derived name on the dataset is fine). Calib provenance lives
   in run logs + `data/MANIFEST.sha256`, not quant dir names.
+  **No sequenced v-numbers for calib variants either** (2026-10-18):
+  name the recipe delta — `calib-cascade-agent3x` (agentic domains
+  tripled), `calib-cascade-if3x` (IF share tripled) — never `v2`/`v4`.
+  Historical references keep a recipe gloss on first mention
+  (cascade-v2 = agent-tripled, cascade-v3 = agent×1.5+ML).
 - Cards carry `model.safetensors` sha256 and full provenance
   (train_command, run.yaml, training_state, val_metrics).
 
