@@ -29,13 +29,16 @@ from pathlib import Path
 TASK_METRICS = {
     "humaneval_plus_instruct": ["pass@1"],
     "humaneval_plus": ["pass@1"],
-    "mbpp_plus_instruct": ["pass@1"],
-    "mbpp_plus": ["pass@1"],
+    "mbpp_plus_instruct": ["pass_at_1", "pass@1"],
+    "mbpp_plus": ["pass_at_1", "pass@1"],
     "ifeval": ["prompt_level_strict_acc"],
     "minerva_math500": ["exact_match"],
-    "gpqa_diamond_cot_zeroshot": ["exact_match"],
+    # gpqa exposes two exact_match filters; flexible-extract is the headline
+    # metric (strict is near-floor for this family) — pin it so the paired
+    # bootstrap runs on the filter we quote
+    "gpqa_diamond_cot_zeroshot": ["exact_match,flexible-extract", "exact_match"],
 }
-DEFAULT_METRICS = ["pass@1", "prompt_level_strict_acc", "exact_match", "acc"]
+DEFAULT_METRICS = ["pass@1", "pass_at_1", "prompt_level_strict_acc", "exact_match", "acc"]
 
 
 def find_one(pattern, side_dir):
@@ -59,6 +62,12 @@ def load_results(side_dir):
 
 
 def pick_metric(task, metrics):
+    # pass 1: exact key (candidates may pin a filter, e.g.
+    # "exact_match,flexible-extract"); pass 2: metric-part only
+    for cand in TASK_METRICS.get(task, []) + DEFAULT_METRICS:
+        for key in metrics:
+            if key == cand:
+                return key
     for cand in TASK_METRICS.get(task, []) + DEFAULT_METRICS:
         for key in metrics:
             if key.split(",")[0] == cand:
@@ -89,6 +98,8 @@ def load_samples(side_dir, task, key):
     rows = {}
     unresolved = 0
     bad = 0
+    stem = key.split(",")[0]
+    suffix = key.split(",", 1)[1] if "," in key else None
     for path in paths:
         with open(path) as f:
             for line in f:
@@ -96,10 +107,16 @@ def load_samples(side_dir, task, key):
                     rec = json.loads(line)
                     if "doc_id" not in rec:
                         continue
+                    # when the aggregate key pins a filter (e.g.
+                    # exact_match,flexible-extract), keep only the sample
+                    # records logged for THAT filter — records for other
+                    # filters carry the same bare metric field and must not
+                    # overwrite the pinned one
+                    if suffix is not None and rec.get("filter") not in (None, suffix):
+                        continue
                     if key in rec:
                         val = float(rec[key])
                     else:
-                        stem = key.split(",")[0]
                         cands = [k for k in rec if k.split(",")[0] == stem and "stderr" not in k]
                         if len(cands) != 1:
                             unresolved += 1
@@ -107,6 +124,9 @@ def load_samples(side_dir, task, key):
                         val = float(rec[cands[0]])
                 except (json.JSONDecodeError, ValueError, TypeError):
                     bad += 1  # truncated tail etc. — degrade one doc, not the report
+                    continue
+                if rec["doc_id"] in rows:
+                    unresolved += 1  # duplicate doc for the same filter — ambiguous
                     continue
                 rows[rec["doc_id"]] = val
     if bad:

@@ -39,7 +39,13 @@ source "$(dirname "$0")/../lib/runlib.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LM_EVAL="$ROOT/.venv-dflash/bin/lm-eval"          # vllm 0.31.0 lives here
 LMEVAL_VER=$($ROOT/.venv-dflash/bin/python -c "import lm_eval; print(lm_eval.__version__)")
-PY="$ROOT/.venv-quant/bin/python"
+# report is stdlib-only; prefer .venv-quant, fall back to the dflash venv
+# (pods built by pod_prep may only have .venv-dflash)
+if [[ -x $ROOT/.venv-quant/bin/python ]]; then
+  PY="$ROOT/.venv-quant/bin/python"
+else
+  PY="$ROOT/.venv-dflash/bin/python"
+fi
 DEFAULT_TASKS="humaneval_plus,mbpp_plus,ifeval,minerva_math500,gpqa_diamond_cot_zeroshot"
 
 MODEL_KEY=4b BASE="" QUANT="" TASKS=$DEFAULT_TASKS LIMIT="" TAG="" SIDES=both ALLOW_CODE_EVAL=0
