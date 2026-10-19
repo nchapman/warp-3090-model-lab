@@ -32,9 +32,14 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
 > `results/battery-think-cap-confound-20261019.md`. Measured numbers in
 > this grid stand as measurements; every ifeval/gpqa verdict is pending
 > re-adjudication under the fixed protocol (trial COMPLETE: the
-> champion's ifeval cliff is think-mode damage — −7.0 with reasoning on
-> under a sound instrument, −1.7 ns with reasoning off — see the
-> confound doc). Code legs (humaneval+/mbpp+) are unconfounded (0% think).
+> champion's ifeval cliff is think-mode damage — ~~−7.0 with reasoning on
+> under a sound instrument, −1.7 ns with reasoning off~~ [the "sound
+> instrument" assumption failed the same day: the 16k chat legs cut
+> 57%/72% of ifeval rows; paired-complete −3.4, and gpqa's −11.1-style
+> cliffs are truncation artifacts (pc +0.0) — re-adjudication now runs
+> under the v2 instrument: 32k cap + paired-complete scoring, see
+> `results/battery-fixed-20261019.md`], −1.7 ns with reasoning off — see
+> the confound doc). Code legs (humaneval+/mbpp+) are unconfounded (0% think).
 
 ## ARM1 long8k — qwenfinals calib @ 8192 vs gdnfix-qwenfinals @ 4096
 

@@ -73,37 +73,49 @@ All-task sweep (same pair):
 | leg | protocol | base | quant | Δ | 95% CI | decomposition |
 |---|---|---|---|---|---|---|
 | T1 comp16k | completion, 16k cap, think on | 54.2 | 42.3 | **−11.8** | [−15.7,−7.8] | flips −10.2 + within −1.7; both-direct (n=140) −7.1 [−12.9,−2.1] |
-| T2 chat16k | chat template, 16k cap, think on | 50.8 | 43.8 | **−7.0** | [−10.5,−3.5] | 0/541 unclosed think BOTH sides — all within-mode, zero flips |
+| T2 chat16k | chat template, 16k cap, think on | 50.8 | 43.8 | **−7.0** | [−10.5,−3.5] | ~~0/541 unclosed think BOTH sides~~ [blind check — T2 actually cut 57%/72% at cap] — all within-mode, zero flips |
 | T3 chat16k-nothink | chat, 16k cap, `enable_thinking=False` | 83.0 | 81.3 | **−1.7** | [−4.3,+0.9] ns | **0/541 raw `<think>` tokens both sides — plumbing verified** |
 
 Findings:
 
 1. **The champion's ifeval damage is think-mode damage.** Compliance
-   measured clean of reasoning (T3): −1.7, CI crosses zero. Reasoning-on
+   measured clean of reasoning (T3): −1.7, CI crosses zero. ~~Reasoning-on
    under a sound instrument (T2: untruncated, zero mode flips): −7.0.
-   The quant degrades the reasoning chains, not instruction-following.
+   The quant degrades the reasoning chains, not instruction-following.~~
+   **[PARTLY REFUTED (2026-10-19): T2 was NOT untruncated — 57%/72% of
+   rows cut at the 16k cap (marker check was blind for chat legs).
+   Paired-complete: −3.4 [−6.9,−0.9]. Think-mode-only direction stands;
+   magnitude and "degrades the chains" vs "thinks longer past the cap"
+   is exactly what the 32k v2 run separates.]**
 2. **Truncation FLATTERED the champion**: 4096-cap completion −7.0
    (H200) / −7.95 (GB10) → 16k-cap completion −11.8. At 16k the
    "direct" class absorbs closed-think chains and quant error compounds
    across the longer reasoning (both-direct: −4.3 ns → −7.1 sig).
 3. **Completion mode is itself an amplifier**: same 16k cap, chat
    template −7.0 vs completion −11.8 — spontaneous mode flips
-   (125+54/541) are a completion-mode phenomenon.
+   (125+54/541) are a completion-mode phenomenon. [Later note: the −7.0
+   here also carries cap asymmetry — pc −3.4; the amplifier comparison
+   is between two truncated instruments, direction only.]
 4. Base-side measurement worth knowing: thinking costs the 4B BASE
    32pt of ifeval strict acc (83.0 nothink vs 50.8 think-on).
 
 ## Adopted fixed battery — RUN COMPLETE (2026-10-19)
 
 Results: `results/battery-fixed-20261019.md`. Champion fixed reference:
-**gpqa −11.1 (was −4.5 ns confounded — truncation masked the worst cliff),
-ifeval-think −7.6, everything else clean** (math +1.6, humaneval −2.4,
-mbpp +3.4, ifeval-compliance −1.7 ns). Damage signature = knowledge-heavy
-reasoning. These are the bar for arm re-adjudication.
+~~**gpqa −11.1 (was −4.5 ns confounded — truncation masked the worst
+cliff), ifeval-think −7.6, everything else clean** (math +1.6, humaneval
+−2.4, mbpp +3.4, ifeval-compliance −1.7 ns). Damage signature =
+knowledge-heavy reasoning. These are the bar for arm re-adjudication.~~
+**[REFUTED the same day by the truncation audit: the 16k think legs cut
+57%/72% (ifeval) and 22%/36% (gpqa); paired-complete gpqa is +0.0 and
+ifeval-think −3.4. Current bar = the v2 rerun (32k cap, paired-complete
+scoring).]**
 
 - **ifeval runs BOTH ways**: chat+nothink@16k (compliance instrument,
-  T3 protocol) AND chat+think@16k (reasoning-retention instrument, T2).
-- **gpqa / math500**: chat+think@16k (truncation removed; these tasks
-  need reasoning).
+  T3 protocol) AND chat+think (reasoning-retention instrument, T2).
+- **gpqa / math500**: chat+think ~~@16k (truncation removed; these tasks
+  need reasoning)~~ **[16k did NOT remove truncation — v2 uses 32k]**;
+  these tasks need reasoning.
 - **humaneval+ / mbpp+**: stay completion@4096 (0% think — clean; and
   chat template breaks lm-eval's execution grader).
 - Arm re-adjudication under this battery queued (recipes frozen,

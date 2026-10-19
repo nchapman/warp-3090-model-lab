@@ -89,6 +89,13 @@ confirmed by the harness's invalid-generation-flags warning in the run log.
 > 4096-token cap, mode flips dominating the delta) — decomposed and
 > re-adjudication status in `results/battery-think-cap-confound-20261019.md`;
 > fixed-protocol rerun results in `results/battery-fixed-20261019.md`.
+> **Update (same day, later):** the "fixed" 16k rerun was ALSO
+> truncating (57%/72% of ifeval-think rows at cap; the marker check
+> used to clear it is blind for chat-template legs). Current
+> paired-complete truth: gpqa +0.0, ifeval-think −3.4, math/nothink/
+> code unchanged — the earlier "damage = knowledge-heavy reasoning"
+> signature is refuted; authoritative rerun is the v2 battery (32k cap,
+> paired-complete scoring).
 
 > Provenance corrected 2026-10-18: run logs carry `/root/.cache/huggingface`
 > paths — this battery ran on the A100 pod, not GB10 (mis-labeled when the
@@ -388,6 +395,9 @@ What GPTQ actually sees (4096-token window, 120-row sample, tokens):
 
 > **Methodology caveat (2026-10-19):** ifeval numbers below carry the
 > think-cap confound — see `results/battery-think-cap-confound-20261019.md`.
+> Both the 4096-completion and the 16k-chat instruments truncate
+> think-mode generations asymmetrically; paired-complete scoring is the
+> current protocol (`results/battery-fixed-20261019.md`).
 
 Same rig as the champion battery (humaneval_plus, mbpp_plus, ifeval,
 minerva_math500, gpqa_diamond; full n; think-strip; lm-eval 0.4.13;
