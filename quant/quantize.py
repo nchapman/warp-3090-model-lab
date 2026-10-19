@@ -188,7 +188,7 @@ def get_calibration_dataset(processor, calib, num_samples, max_seq_length,
     return ds
 
 
-def build_recipe(algo, moe=False):
+def build_recipe(algo, moe=False, full_bit_attn=False):
     # vision tower, lm_head, and the GDN per-head gates stay BF16.
     # in_proj_a/b are N=32 (dense 4B/9B) / N=48 (27B) — Marlin (SGLang)
     # requires N % 64 == 0 on every packed tensor, so quantizing them breaks
@@ -209,7 +209,7 @@ def build_recipe(algo, moe=False):
     ignore = ignore + (moe_ignore if moe else [])
     if algo == "gptq":
         return GPTQModifier(targets="Linear", scheme="W4A16",
-                             ignore=_gptq_ignore(moe))
+                             ignore=_gptq_ignore(moe, full_bit_attn))
     if algo == "duo":
         # the library's canonical recipe verbatim (examples/quantization_w4a16/
         # qwen3_8_gptq_awq_example.py): AWQ pre-scaling + GPTQ, with the
@@ -353,12 +353,18 @@ def assert_packed_div64(save_dir):
     print(f"assert_packed_div64: OK ({save_dir})")
 
 
-def _gptq_ignore(moe=False):
+def _gptq_ignore(moe=False, full_bit_attn=False):
     """Canonical gptq-path ignore list (shared by build_recipe and the
     pre-flight div64 check — keep in sync or the invariant drifts)."""
     ignore = ["lm_head", "re:.*visual.*",
               r"re:.*linear_attn\.in_proj_a$",
               r"re:.*linear_attn\.in_proj_b$"]
+    if full_bit_attn:
+        # precision-side ablation: EVERY attention projection (self_attn
+        # q/k/v/o + linear_attn in/out) stays BF16; MLP/experts stay W4.
+        # Regex matches any module path containing both 'attn' and 'proj'
+        # — self_attn.* and linear_attn.* only in Qwen3.5 hybrids.
+        ignore.append(r"re:.*attn.*proj.*$")
     return ignore + (["re:.*shared_expert.*"] if moe else [])
 
 
@@ -374,7 +380,7 @@ def _matches_ignore(name, ignore):
     return False
 
 
-def assert_preflight_div64(model, moe=False):
+def assert_preflight_div64(model, moe=False, full_bit_attn=False):
     """Fail BEFORE any GPU work: every Linear that will be GPTQ-packed must
     have out_features % 64 == 0 (Marlin/SGLang kernel constraint), unless it
     is on the ignore list (stays bf16, never packed). Same predicate as
@@ -382,7 +388,7 @@ def assert_preflight_div64(model, moe=False):
     gaps in seconds instead of after a full quant run (2026-10-18: the
     post-hoc guard cost a 46-min run to discover in_proj_a/b N=32)."""
     import torch.nn as nn
-    ignore = _gptq_ignore(moe)
+    ignore = _gptq_ignore(moe, full_bit_attn)
     bad = [f"{name} N={m.out_features}"
            for name, m in model.named_modules()
            if isinstance(m, nn.Linear)
@@ -419,6 +425,10 @@ def main():
     parser.add_argument("--seed", type=int, default=0,
                         help="seed for --window random (0 = fixed default)")
     parser.add_argument("--tag", default=None, help="output dir suffix")
+    parser.add_argument("--full-bit-attn", action="store_true",
+                        help="keep ALL attention projections (self_attn "
+                             "q/k/v/o + linear_attn in/out) at BF16; "
+                             "MLP/experts stay W4A16")
     args = parser.parse_args()
     from lablog import log_event
     log_event("RUN_START", model=args.model, algo=args.algo, calib=args.calib)
@@ -458,7 +468,7 @@ def main():
     # Marlin div-64 gate BEFORE any calibration/quantization GPU work —
     # the post-save assert_packed_div64() is the export gate; this is the
     # 1-second version of the same invariant (see its docstring).
-    assert_preflight_div64(model, moe=is_moe)
+    assert_preflight_div64(model, moe=is_moe, full_bit_attn=args.full_bit_attn)
     log_event("PREFLIGHT_DIV64_OK")
 
     # GB10 unified memory: the just-read base shards (~67GB for 35b) sit in
@@ -479,7 +489,7 @@ def main():
             processor, args.calib, args.num_samples, args.max_seq_length,
             window=args.window, seed=args.seed
         ),
-        recipe=build_recipe(args.algo, moe=is_moe),
+        recipe=build_recipe(args.algo, moe=is_moe, full_bit_attn=args.full_bit_attn),
         max_seq_length=args.max_seq_length,
         num_calibration_samples=args.num_samples,
     )
