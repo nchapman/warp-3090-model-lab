@@ -82,12 +82,22 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
   first written (provenance.json is the truth: teacher
   qwen/qwen3.8-flash@openrouter, t0.7/p0.95/k20, max_tokens 16384,
   999 rows).
-- paired probe: CANNOT run on A100 (73GB resident + int8 decompress
-  transients > 80GB — hard OOM at 25% decompress, t-mveumpnh). Queued to
-  H200 tail after batteries (~09:10Z).
-- Canonical decision (user): keep incumbent / second public repo /
-  replace-after-probe. Incumbent's +1.00% is a high bar; replacement also
-  swaps chat template for 95 downloaders.
+- paired probe (H200, probe-v4, 378 rows): dPPL **+0.28%** (qNLL 2.1532
+  vs base 2.1471), weightedKL 0.1206, p99.9 24.49. Domains: several
+  NEGATIVE (IF -1.88%, math -0.95%, chat -0.19% — quant ≈ base at
+  noise level); swe +16.27% outlier + conv_agent KL 2.14 (the usual
+  low-entropy-syntax signature, seen at every size).
+  vs incumbent card (+1.00% aggregate, per-domain KL chat 0.033 / IF
+  0.053 / math 0.098 / science 0.097 / terminal 0.486): today's build
+  is 3.6× better on aggregate dPPL and KL-equivalent domain-by-domain
+  (chat 0.032 / IF 0.052 / math 0.100 / science 0.088 / terminal 0.479).
+  Same probe design (378 conv, 7 domains + 9 langs); incumbent's host
+  machine unknown — treat dPPL as same-instrument, mild caution.
+- battery arbitration RUNNING (t-mvewo1ia): base + incumbent + qwenfinals
+  sides on H200 (~40 min; incumbent pulled from Hub — it had NO battery
+  numbers on its card).- probe ran on H200 after A100 OOM'd (73GB resident
+  + int8 decompress transients > 80GB); artifact came via the holding
+  repo download.
 - A100 pod 8v9gjqwhj1a5pf STOPPED 06:15Z (EXITED, disk retained) after
   Hub verify + receipts sync — nothing GPU-bound remained.
 
