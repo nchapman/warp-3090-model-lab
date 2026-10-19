@@ -9,6 +9,27 @@ Run dirs (pod-synced): `runs/battery-fixedR.20261019T155447Z.10387`
 (reasoning leg), `runs/battery-fixedD.20261019T154427Z.8858` (compliance
 leg), `runs/battery-fixedC.20261019T164651Z.13540` (code leg).
 
+## Instrument caveat (added post-run, 2026-10-19 — token-length audit)
+
+**Think-leg deltas still carry truncation asymmetry.** Token-count
+audit of every stored response vs the cap: ifeval-think 311/541 base
+(57%) vs 391/541 quant (72%) at 16k; gpqa 86/396 (22%) vs 144/396
+(36%); math500 23/19 (≈4%, near-symmetric); nothink 9/17 (≈1–3%);
+code 3+3/5+2 (≈1%). The quant's longer reasoning hits the cap more
+often and those rows grade as zeros — so ifeval-think −7.6 and gpqa
+−11.1 mix reasoning damage with cap asymmetry; nothink −1.7, math
++1.6, and the code legs are near-symmetric. Part of the gpqa
+"widening" (−4.5→−11.1) may be cap asymmetry, not unmasked damage.
+The earlier "0 unclosed think" marker check is blind for chat legs:
+the template prefills the opening tag, so a capped generation carries
+NO markers — token length vs cap is the only direct evidence.
+
+**Consequence for re-adjudication:** champion and arms are measured
+under the SAME instrument, so arm-vs-champion comparisons remain
+valid; absolute think-leg deltas are "damage under a 16k cap", not
+cap-free damage. Length (bigger cap / length-normalized scoring) is a
+deliberately deferred revisit — see findings below.
+
 ## Protocol
 
 | leg | tasks | protocol |

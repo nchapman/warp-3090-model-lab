@@ -121,6 +121,16 @@ SSH "cd $REPO_DIR && { .venv-dflash/bin/python -c 'import torch, speculators, vl
           && .venv-dflash/bin/pip install -q -U pip \
           && .venv-dflash/bin/pip install -q -r requirements-drafter.txt \
           && echo 'venv built'; }"
+# quant venv (torch 2.14 / llmcompressor) — separate interpreter, needed by
+# run_quant.sh; skipped when already importable. Not part of the drafter
+# venv above (2026-10-19: the trial pod silently lacked it and every
+# run_quant died at exec).
+SSH "cd $REPO_DIR && { .venv-quant/bin/python -c 'import torch, llmcompressor, transformers, gptqmodel' 2>/dev/null \
+        && echo 'quant venv already importable — skipping pip'; } \
+     || { python3 -m venv .venv-quant \
+          && .venv-quant/bin/pip install -q -U pip \
+          && .venv-quant/bin/pip install -q -r requirements-quant.txt \
+          && echo 'quant venv built'; }"
 
 stage "patches"
 # ORDER MATTERS: draft_opd's train/data.py hunk is cut against the
