@@ -100,7 +100,9 @@ export MEM_GUARD_MB=${MEM_GUARD_MB:-16384}
 # Thinking-model handling (see header): strip reasoning post-hoc, never
 # truncate mid-think. Truncation-by-budget failures (answer never reached)
 # then surface honestly as graded misses on both sides alike.
-THINK_ARGS="enable_thinking=True,think_end_token=</think>"
+# THINK_ARGS is env-overridable for trials (e.g. enable_thinking=False with
+# --apply_chat_template to measure non-thinking chat mode).
+THINK_ARGS=${THINK_ARGS:-enable_thinking=True,think_end_token=</think>}
 
 # lm-eval 0.4.13 postprocess_generated_text() does
 # `generation.split(think_end_token)[-1].lstrip()` — the lstrip is
