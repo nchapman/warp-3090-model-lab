@@ -175,7 +175,7 @@ run_side() {  # run_side <name> <model_path> [extra model_args]
 if [[ $SIDES == both ]]; then
   REPORT="$RUN_DIR/battery-report.json"
   if ! "$PY" "$ROOT/quant/battery_report.py" --base "$RUN_DIR/raw/base" \
-      --quant "$RUN_DIR/raw/quant" --json "$REPORT" 2>&1 | tee "$RUN_DIR/report.txt" >&2; then
+      --quant "$RUN_DIR/raw/quant" --gen_cap "$MAX_GEN_TOKS" --json "$REPORT" 2>&1 | tee "$RUN_DIR/report.txt" >&2; then
     finish_fail "stage=report"
   fi
   WORST=$("$PY" -c "
