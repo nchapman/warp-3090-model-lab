@@ -103,17 +103,31 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
   RUNNING: qwenfinals weights + incumbent template (hybrid dir
   /root/qf-froggeric, symlinked weights + copied chat_template.jinja;
   tokenizer_config embeds no template on either side).
-- **VERDICT: (pending hybrid side)** — incumbent stands until the
-  template-vs-weights split is measured.
+- hybrid side (qwenfinals weights + froggeric v22.5 template,
+  /root/qf-froggeric, run battery-27b-qf-froggeric): humaneval **-34.1**
+  [-42.1,-26.2], ifeval **-24.2** [-28.7,-19.8], gpqa **-18.7** — template
+  ruled out; the WEIGHTS are damaged. Not a regression vs the original
+  template side (humaneval -35.4→-34.1, ifeval -20.7→-24.2 — noise).
+- **VERDICT: REJECT qwenfinals @27B — incumbent cascade-v1 stays
+  canonical.** Incumbent battery (first ever measured): ifeval -0.9 /
+  gpqa -3.0 / humaneval -1.8 / mbpp -4.2 / math +4.0, zero cliffs.
+  Replacement required "better"; it is strictly worse on capability.
+  No user decision needed — the data is unambiguous.
+- **Doctrine: probe-v4 cannot arbitrate 27B caligs** — it ranked
+  qwenfinals 3.6× better (dPPL +0.28 vs +1.00, KL-equivalent per domain)
+  while the battery shows a code/IF catastrophe. Consistent with 4B:
+  flash-authored finals hurt ifeval at both scales (4B: -14.6 vs -7.8;
+  27B: -20.7 vs -0.9). Battery is the decider — starkest example yet.
 - A100 pod 8v9gjqwhj1a5pf STOPPED 06:15Z (EXITED, disk retained) after
   Hub verify + receipts sync — nothing GPU-bound remained.
 
 ## ARM3 4bself — self-authored finals vs gdnfix-qwenfinals (flash-authored)
 
-- regen: RUNNING on GB10 (saturated 96/96, 650 tok/s — bandwidth-starved,
-  ETA ~11-15Z) AND queued to start on H200 after the froggeric battery
-  (~08:20Z; 3× faster, pod has calib sha-verified + 4B base cached,
-  GPU_MEM_UTIL=0.9, CONC=128). First finisher wins; script is resumable.
+- regen: DONE-pending on H200 (GB10 first pass too slow: saturated but
+  bandwidth-starved, 650 tok/s). H200 pass launched 08:19:45Z
+  (run regen_calib_4bself.20261019T081945Z.95918, server pid 95943,
+  GPU_MEM_UTIL=0.9, CONC=128, same resumable script, calib sha
+  1c7964a0-verified on pod). GB10 pass left running as backup.
 - quant: (pending — @4096 windows per ARM1 verdict)
 - probe: (pending)
 - battery: (pending)
