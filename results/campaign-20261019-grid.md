@@ -93,18 +93,28 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
   (chat 0.032 / IF 0.052 / math 0.100 / science 0.088 / terminal 0.479).
   Same probe design (378 conv, 7 domains + 9 langs); incumbent's host
   machine unknown — treat dPPL as same-instrument, mild caution.
-- battery arbitration RUNNING (t-mvewo1ia): base + incumbent + qwenfinals
-  sides on H200 (~40 min; incumbent pulled from Hub — it had NO battery
-  numbers on its card).- probe ran on H200 after A100 OOM'd (73GB resident
-  + int8 decompress transients > 80GB); artifact came via the holding
-  repo download.
+- battery (H200, same base side): incumbent cascade-v1 = near-perfect
+  retention (ifeval -0.9, gpqa -3.0, humaneval -1.8, mbpp -4.2,
+  math +4.0, NO cliffs); qwenfinals = CATASTROPHE on code/IF
+  (humaneval **-35.4**, ifeval **-20.7**, gpqa -13.1) despite winning
+  the probe. KNOWN CONFOUND: incumbent ships froggeric v22.5 chat
+  template (28.2KB), qwenfinals build carries a different 8.9KB one;
+  each battery side inherits its own template. One-lever arbitration
+  RUNNING: qwenfinals weights + incumbent template (hybrid dir
+  /root/qf-froggeric, symlinked weights + copied chat_template.jinja;
+  tokenizer_config embeds no template on either side).
+- **VERDICT: (pending hybrid side)** — incumbent stands until the
+  template-vs-weights split is measured.
 - A100 pod 8v9gjqwhj1a5pf STOPPED 06:15Z (EXITED, disk retained) after
   Hub verify + receipts sync — nothing GPU-bound remained.
 
 ## ARM3 4bself — self-authored finals vs gdnfix-qwenfinals (flash-authored)
 
-- regen: BLOCKED until ARM1 length verdict (finals max_tokens tuned to winner)
-- quant: (pending)
+- regen: RUNNING on GB10 (saturated 96/96, 650 tok/s — bandwidth-starved,
+  ETA ~11-15Z) AND queued to start on H200 after the froggeric battery
+  (~08:20Z; 3× faster, pod has calib sha-verified + 4B base cached,
+  GPU_MEM_UTIL=0.9, CONC=128). First finisher wins; script is resumable.
+- quant: (pending — @4096 windows per ARM1 verdict)
 - probe: (pending)
 - battery: (pending)
 - VERDICT: (pending)
