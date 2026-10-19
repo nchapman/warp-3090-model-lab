@@ -21,6 +21,19 @@ battery-base-reanchor.20261019T055723Z.22037 + battery-champion-reanchor.2026101
 Machines agree (-7.0 vs -7.8 on ifeval): H200 numbers are directly
 comparable to GB10 controls; cross-machine caveat retired for this grid.
 
+> **RETRACTION (2026-10-19, later same day):** the doctrine recorded
+> below — "probe-v4 cannot arbitrate calib recipes; battery is the only
+> decider" — is WITHDRAWN. The battery's ifeval/gpqa legs ran in
+> completion mode with a 4096-token generation cap: spontaneous
+> `<think>` gets truncated mid-reasoning (99% of unclosed think is
+> at-cap, i.e. WE cut it) and quant-vs-base response-mode flips dominate
+> the ifeval delta (champion −7.95pt = −7.39 mode-flips − 0.55
+> within-mode). Full record + receipts:
+> `results/battery-think-cap-confound-20261019.md`. Measured numbers in
+> this grid stand as measurements; every ifeval/gpqa verdict is pending
+> re-adjudication under the fixed protocol (trial running on H200).
+> Code legs (humaneval+/mbpp+) are unconfounded (0% think).
+
 ## ARM1 long8k — qwenfinals calib @ 8192 vs gdnfix-qwenfinals @ 4096
 
 - quant: runs/quant-4b.20261019T044905Z.11153 (H200, 36 min, RUN_DONE ok,
@@ -54,8 +67,9 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
 - battery (H200): ifeval **-14.2** CI [-17.9,-10.5] ⛔ — the IF dose
   DOUBLED ifeval damage vs champion (-7.0). But mbpp **+10.3** [+4.8,+15.9]
   ⬆ (largest gain on the board) and math500 **+5.4** [+0.6,+10.0] ⬆.
-  Note: probe had IF as the arm's best domain (+0.62% dPPL) — second
-  consecutive campaign where teacher-forced KL does NOT predict ifeval.
+  Note: probe had IF as the arm's best domain (+0.62% dPPL).
+  [Retracted: the "teacher-forced KL does NOT predict ifeval" framing
+  was scored against the confounded ifeval leg — see the banner.]
 - **VERDICT: REJECT for the IF purpose** (dose hurts its target). The
   mbpp/math trade is real damage-shifting, not damage-fixing — logged as
   a lead (cascade+IF-append recipe shifts quant damage from code/math
@@ -113,11 +127,13 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
   gpqa -3.0 / humaneval -1.8 / mbpp -4.2 / math +4.0, zero cliffs.
   Replacement required "better"; it is strictly worse on capability.
   No user decision needed — the data is unambiguous.
-- **Doctrine: probe-v4 cannot arbitrate 27B caligs** — it ranked
+- **Doctrine (RETRACTED — see banner): probe-v4 cannot arbitrate 27B
+  caligs** — it ranked
   qwenfinals 3.6× better (dPPL +0.28 vs +1.00, KL-equivalent per domain)
   while the battery shows a code/IF catastrophe. Consistent with 4B:
   flash-authored finals hurt ifeval at both scales (4B: -14.6 vs -7.8;
-  27B: -20.7 vs -0.9). Battery is the decider — starkest example yet.
+  27B: -20.7 vs -0.9). ["Battery is the decider" — withdrawn same day;
+  the battery's ifeval legs were confounded.]
 - A100 pod 8v9gjqwhj1a5pf STOPPED 06:15Z (EXITED, disk retained) after
   Hub verify + receipts sync — nothing GPU-bound remained.
 
@@ -142,8 +158,8 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
   With flash@4B (-14.6 GB10), flash@27B (-20.7 H200), self@4B (-12.6):
   EVERY regenerated-finals calib doubles ifeval damage vs cascade-v1
   (-7.0 H200 / -7.8 GB10). The champion's Nemotron hand-authored finals
-  are load-bearing for IF. (Probe ranked this arm best — third
-  probe/battery inversion of the campaign.)
+  are load-bearing for IF. (Probe ranked this arm best — the
+  "probe/battery inversion" framing is retracted; see the banner.)
 
 ## Verdict table
 
@@ -159,8 +175,18 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
 1. Cascade-v1 @4096 wins every comparison — calib composition is
    already optimal among tested deltas; all four levers (window, IF
    dose, author flash, author self) made things worse on ifeval.
-2. Probe-v4 (teacher-forced KL/dPPL) ranked the two worst battery
-   artifacts as the two best probes — it cannot arbitrate calib
-   recipes; battery is the only decider.
-3. ifeval is the universal casualty of calib drift; code/math move
-   around (if3x bought mbpp +10.3) but IF only degrades.
+2. [RETRACTED 2026-10-19] Probe-v4 ranked the two worst battery
+   artifacts as the two best probes — the doctrine this produced
+   ("cannot arbitrate calib recipes; battery is the only decider") is
+   withdrawn: the battery's ifeval/gpqa legs were confounded by
+   think-cap truncation and mode flips
+   (`results/battery-think-cap-confound-20261019.md`). Whether probe-v4
+   can arbitrate calib recipes is RE-OPENED, to be decided against the
+   fixed battery.
+3. ifeval is the universal casualty of calib drift (measured under the
+   confounded 4096-cap protocol — pending re-adjudication); code/math
+   move around (if3x bought mbpp +10.3) but IF only degrades.
+
+All REJECT verdicts above rest on ifeval cliffs measured under the
+confounded protocol; same-protocol pairing means rankings may survive,
+but no cliff is quotable until re-measured under the fixed battery.

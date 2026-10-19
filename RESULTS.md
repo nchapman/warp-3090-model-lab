@@ -84,6 +84,11 @@ confirmed by the harness's invalid-generation-flags warning in the run log.
 
 ### Capability battery — lm-eval cliff detection (2026-10-17/18, RunPod A100 SXM 80GB quant-lab-a100, greedy t=0)
 
+> **Methodology caveat (2026-10-19):** ifeval/gpqa numbers in this
+> section were measured under the think-cap confound (completion mode,
+> 4096-token cap, mode flips dominating the delta) — decomposed and
+> re-adjudication status in `results/battery-think-cap-confound-20261019.md`.
+
 > Provenance corrected 2026-10-18: run logs carry `/root/.cache/huggingface`
 > paths — this battery ran on the A100 pod, not GB10 (mis-labeled when the
 > synced run dir was written up). Timing matters operationally: 23 min/side
@@ -379,6 +384,9 @@ What GPTQ actually sees (4096-token window, 120-row sample, tokens):
   or we calibrate long and measure short (same blindness as GGUF).
 
 ### Capability battery — gdnfix arms + champion cross-host control (2026-10-18, RunPod A100 SXM 80GB, greedy t=0)
+
+> **Methodology caveat (2026-10-19):** ifeval numbers below carry the
+> think-cap confound — see `results/battery-think-cap-confound-20261019.md`.
 
 Same rig as the champion battery (humaneval_plus, mbpp_plus, ifeval,
 minerva_math500, gpqa_diamond; full n; think-strip; lm-eval 0.4.13;
