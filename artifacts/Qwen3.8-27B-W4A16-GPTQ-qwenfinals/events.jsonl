@@ -1,0 +1,4 @@
+{"ts": "2026-10-19T00:26:06.085Z", "type": "RUN_START", "name": "quant-27b", "dir": "/root/warp-3090-quant-lab/runs/quant-27b.20261019T002606Z.37464"}
+{"ts": "2026-10-19T00:26:06.121Z", "type": "QUANT_START", "model": "27b args=--calib data/calib-cascade-qwenfinals.jsonl --tag qwenfinals"}
+{"ts": "2026-10-19T06:02:08.017Z", "type": "QUANT_DONE", "model": "27b out=/root/warp-3090-quant-lab/runs/quant-27b.20261019T002606Z.37464/quant.log"}
+{"ts": "2026-10-19T06:02:08.054Z", "type": "RUN_DONE", "status": "ok", "model": "27b"}

@@ -1,0 +1,3 @@
+# utc: 2026-10-19T00:26:06Z
+# host: 643d9e68e263
+# cmd: quant/run_quant.sh quant-27b 

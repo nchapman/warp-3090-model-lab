@@ -1,0 +1,2 @@
+{"ts": "2026-10-19T06:52:33.265Z", "type": "RUN_START", "tool": "probe", "model": "27b", "quant": "/root/.cache/huggingface/hub/models--nchapman--Qwen3.8-27B-W4A16-GPTQ-qwenfinals/snapshots/aa63e29eb30c9fa210ce3cb866df3f0d901da1e3/", "eval_set": "data/probe-v4.jsonl"}
+{"ts": "2026-10-19T07:00:25.309Z", "type": "RUN_DONE", "tool": "probe", "status": "ok", "mean_kl": 0.3511, "weighted_mean_kl": 0.1206, "p999_kl": 24.4944, "dppl_pct": 0.28}
