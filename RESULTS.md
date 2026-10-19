@@ -87,7 +87,8 @@ confirmed by the harness's invalid-generation-flags warning in the run log.
 > **Methodology caveat (2026-10-19):** ifeval/gpqa numbers in this
 > section were measured under the think-cap confound (completion mode,
 > 4096-token cap, mode flips dominating the delta) — decomposed and
-> re-adjudication status in `results/battery-think-cap-confound-20261019.md`.
+> re-adjudication status in `results/battery-think-cap-confound-20261019.md`;
+> fixed-protocol rerun results in `results/battery-fixed-20261019.md`.
 
 > Provenance corrected 2026-10-18: run logs carry `/root/.cache/huggingface`
 > paths — this battery ran on the A100 pod, not GB10 (mis-labeled when the

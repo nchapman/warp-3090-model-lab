@@ -92,7 +92,13 @@ Findings:
 4. Base-side measurement worth knowing: thinking costs the 4B BASE
    32pt of ifeval strict acc (83.0 nothink vs 50.8 think-on).
 
-## Adopted fixed battery
+## Adopted fixed battery — RUN COMPLETE (2026-10-19)
+
+Results: `results/battery-fixed-20261019.md`. Champion fixed reference:
+**gpqa −11.1 (was −4.5 ns confounded — truncation masked the worst cliff),
+ifeval-think −7.6, everything else clean** (math +1.6, humaneval −2.4,
+mbpp +3.4, ifeval-compliance −1.7 ns). Damage signature = knowledge-heavy
+reasoning. These are the bar for arm re-adjudication.
 
 - **ifeval runs BOTH ways**: chat+nothink@16k (compliance instrument,
   T3 protocol) AND chat+think@16k (reasoning-retention instrument, T2).
