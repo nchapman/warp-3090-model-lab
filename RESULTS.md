@@ -498,10 +498,18 @@ one box, base NLL 1.3945 every run):
 | quant | dPPL | wKL |
 |---|---|---|
 | champion | +3.20% | **0.1087** |
+| v1rebuild (champion recipe, current script) | +3.36% | 0.1094 |
 | **attnbf16** (cascade-v1, BF16 attn projections) | **+1.93%** | **0.0733** |
 | qwenfinals@4096 | +2.99% | 0.1128 |
 | if3x@4096 | +1.07% | 0.1106 |
 | 4bself@4096 | +0.48% | 0.1125 |
+
+- **The SGLang/Marlin-era script changes cost nothing measurable**:
+  v1rebuild (champion calib on the current script, receipt
+  runs/quant-4b.20261019T191105Z.37151) = +3.36 / 0.1094 vs champion
+  +3.20 / 0.1087 — 0.16pt dPPL, inside the 0.8–1.7pt rebuild-drift
+  band; wKL flat. The current-script nemotron-calib rebuild is the
+  probe-equivalent, SGLang-safe successor of the champion artifact.
 
 - **Projection bitrate carries ~40% of dPPL / 33% of wKL** (attnbf16 vs
   champion, uniform across all seven probe domains). Cost: +1.9GB
