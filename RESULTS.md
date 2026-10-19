@@ -527,3 +527,39 @@ one box, base NLL 1.3945 every run):
   runs. **Probe optimism about pristine projections is NOT battery
   evidence — 10-18 already showed the two instruments diverge on
   exactly this axis** (qf: best qNLL, worst ifeval).
+
+## 2026-10-20 — VERDICT: rebuild "damage" was a cross-protocol artifact; exclusion retained
+
+Closed with three targeted arms (H200, n=541 paired, chat-template
+serving = deployment mode; receipts runs/verdict-20261019/):
+
+- Champion, chat+think 16k: **−7.6** [−10.5,−3.5] (fixedR; chat16k −7.0).
+- v1rebuild AS BUILT (stock template, SERVING_PARAMS genconfig):
+  **−6.5** [−10.2,−3.0] — champion-class parity in deployment mode.
+- v1rebuild + champion template/genconfig (metadata swap, same weights):
+  **−5.9** [−9.6,−2.4] — metadata worth 0.5pt; template/genconfig exonerated.
+- No-think: v1rebuild-release **−3.7** [−6.7,−0.7] vs champion −1.7
+  [−4.3,+0.9] (CIs overlap; ≤2pt possibly real — consistent with probe
+  dPPL 3.36 vs 3.20).
+
+Why the scare happened: the −7.6-vs−17.7 headline compared CHAT-MODE
+champion against RAW-COMPLETION v1rebuild. Matched completion-16k puts
+champion itself at **−11.8** [−15.7,−7.8] (comp16k) — completion regime
+hammers everyone (base strict 51.8, 58% trunc; v1rebuild −17.7 there is
+~6pt worse, CIs brushing, in a regime nothing is served in). The A100
+gdnfix "cliff" (−13.7/−14.6) was the same protocol class; the
+attribution in the previous section ("−6pt = a/b exclusion") is
+retracted — it was protocol, not exclusion.
+
+Decisions:
+- **GDN in_proj_a/b BF16 exclusion RETAINED** (kernel-compat value at
+  zero measured deployment-mode cost).
+- **v1rebuild is the probe-equivalent, SGLang-safe successor** of the
+  champion artifact; ship-decision pending only the standing per-model
+  regen doctrine.
+- Tooling: capability_battery.sh stamps protocol identity
+  (chat_template/think_args/max_gen_toks/max_model_len) into events;
+  battery_report.py hard-fails cross-protocol pairing (legacy runs
+  without events skip the guard with a warning). arm2 (4bself full
+  battery) was killed mid-run — its question (calib lottery vs
+  systematic exclusion cost) is moot under this verdict.

@@ -195,6 +195,44 @@ def load_resp_lengths(side_dir, task, key, cap, tok):
     return rows
 
 
+# protocol fields whose mismatch between the two sides makes the paired
+# delta meaningless (chat-vs-completion or think-vs-nothink comparisons;
+# 2026-10-19 incident — see RESULTS.md verdict section)
+PROTOCOL_KEYS = ("chat_template", "think_args", "max_gen_toks", "max_model_len")
+
+
+def read_protocol(side_dir):
+    """BATTERY_CONFIG fields from the run owning this side (<run>/raw/<side>).
+    Returns {} for legacy runs without events.jsonl (guard is skipped)."""
+    ev = Path(side_dir).parent.parent / "events.jsonl"
+    if not ev.is_file():
+        return {}
+    for line in ev.read_text().splitlines():
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if rec.get("type") == "BATTERY_CONFIG":
+            return {k: v for k, v in rec.items() if k not in ("ts", "type")}
+    return {}
+
+
+def check_protocol(base_dir, quant_dir):
+    """Refuse cross-protocol pairing; return per-side protocol stamps."""
+    pb, pq = read_protocol(base_dir), read_protocol(quant_dir)
+    if pb and pq:
+        clash = [k for k in PROTOCOL_KEYS if k in pb and k in pq and pb[k] != pq[k]]
+        if clash:
+            detail = "; ".join(f"{k}: base={pb[k]!r} quant={pq[k]!r}" for k in clash)
+            sys.exit(f"PROTOCOL MISMATCH between sides ({detail}). "
+                     "Cross-mode deltas are meaningless — rerun the sides "
+                     "under one protocol.")
+    elif pb or pq:
+        print("warning: protocol stamp found for only one side; cannot guard",
+              file=sys.stderr)
+    return pb or None, pq or None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--base", required=True, help="lm-eval output dir (base side)")
@@ -228,9 +266,10 @@ def main():
         sys.exit(f"no common tasks between sides\n base: {sorted(base_res)}\n quant: {sorted(quant_res)}")
 
     print(f"base : {base_path}\nquant: {quant_path}")
+    proto_base, proto_quant = check_protocol(args.base, args.quant)
     print(f"{'task':34s} {'metric':24s} {'n':>4s} {'base':>7s} {'quant':>7s} "
           f"{'delta':>7s} {'95% CI':>17s} cliff")
-    report = {"cliff_pt": args.cliff_pt, "tasks": {}}
+    report = {"cliff_pt": args.cliff_pt, "protocol": {"base": proto_base, "quant": proto_quant}, "tasks": {}}
     worst = None
     for task in tasks:
         # resolve per side and require the SAME metric key on both — a

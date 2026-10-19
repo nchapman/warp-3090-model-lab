@@ -145,9 +145,17 @@ EOF
 run_init "battery-${TAG:-$MODEL_KEY}"
 require_file "$LM_EVAL" "$QUANT/config.json"
 patch_lmeval_think_strip
+# Protocol identity: cross-mode deltas (chat-template vs raw completion,
+# think vs no-think) are NOT comparable — stamped into events here and
+# enforced by battery_report.py. 2026-10-19: a cross-mode comparison
+# inflated apparent rebuild damage by ~10pt (RESULTS.md, verdict section).
+CHAT_MODE=0
+[[ ${EXTRA_LMEVAL_ARGS:-} == *apply_chat_template* ]] && CHAT_MODE=1
 log_event BATTERY_CONFIG "model=$MODEL_KEY" "base=$BASE" "quant=$QUANT" \
   "tasks=$TASKS" "limit=${LIMIT:-full}" "gpu_mem_util=$GPU_MEM_UTIL" \
-  "max_gen_toks=$MAX_GEN_TOKS" "think_strip=</think>" "allow_code_eval=${HF_ALLOW_CODE_EVAL:-0}" \
+  "max_model_len=$MAX_MODEL_LEN" "max_gen_toks=$MAX_GEN_TOKS" \
+  "think_strip=</think>" "think_args=$THINK_ARGS" "chat_template=$CHAT_MODE" \
+  "allow_code_eval=${HF_ALLOW_CODE_EVAL:-0}" \
   "lm_eval=$LMEVAL_VER" "leading_ws=preserved"
 
 run_side() {  # run_side <name> <model_path> [extra model_args]

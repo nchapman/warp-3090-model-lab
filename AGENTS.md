@@ -137,6 +137,17 @@ paired-complete scoring (`battery_report.py --gen_cap`) excludes docs
 where either side capped (measured over-16k at 4B: ifeval 23–32%, gpqa
 4.5–6%, math 0.4%, code 0%; quant truncs more than base — the gap
 itself is damage). 8k cap ruled out (ifeval >54% would truncate).
+- **Battery protocol modes (2026-10-19 verdict):** chat-template
+  (`EXTRA_LMEVAL_ARGS=--apply_chat_template`) and raw-completion runs
+  are DIFFERENT instruments — completion-16k hammers everyone (champion
+  −11.8 ifeval vs chat-mode −7.6, no-think −1.7) and inflates quant
+  gaps; a cross-mode champion-vs-contender comparison manufactured a
+  false 10pt "damage cliff". Deployment mode (chat template, SERVING
+  regime) is the decision protocol. capability_battery.sh stamps
+  chat_template/think_args/max_gen_toks/max_model_len into events;
+  battery_report.py HARD-FAILS cross-protocol pairing. Matched-mode
+  verdict: v1rebuild is champion-class (−6.5 as-built vs −7.6 champion,
+  n=541) — a/b BF16 exclusion retained, no rebuild needed.
 - **Battery noise floor (measured 2026-10-19, two independent base runs
 at identical config):** ifeval strict is format-robust and stable
 (0.2pt base-vs-base) — the trustworthy discriminator. gpqa
