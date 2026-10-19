@@ -7,7 +7,19 @@ ifeval −14.6; gdnfix-head +2.33% / −13.7; champion +3.33% / −7.8.
 
 ## CHAMPION re-anchor (H200)
 
-(pending)
+battery pair vs H200 base (tasks n=198/164/541/378/500), run dirs
+battery-base-reanchor.20261019T055723Z.22037 + battery-champion-reanchor.20261019T060924Z.30897:
+
+| Δ vs base | champion (H200) | champion (GB10) |
+|---|---|---|
+| ifeval | **-7.0** CI [-10.9,-3.1] ⛔ | -7.8 |
+| gpqa | -4.5 [-12.1,+3.0] | — |
+| humaneval+ | -2.4 [-7.9,+3.0] | — |
+| mbpp+ | +1.3 [-4.5,+7.1] | — |
+| math500 | +2.6 [-2.0,+7.0] | — |
+
+Machines agree (-7.0 vs -7.8 on ifeval): H200 numbers are directly
+comparable to GB10 controls; cross-machine caveat retired for this grid.
 
 ## ARM1 long8k — qwenfinals calib @ 8192 vs gdnfix-qwenfinals @ 4096
 
@@ -20,8 +32,12 @@ ifeval −14.6; gdnfix-head +2.33% / −13.7; champion +3.33% / −7.8.
   GB10 control gdnfix-qwenfinals: +0.98% / qNLL 1.4157 — probe says 8192
   LOSES to 4096 by ~2pt on its own instrument (cross-machine caveat;
   battery decides).
-- battery: RUNNING (t-mveu31n7, side queued after base + champion)
-- VERDICT: (pending battery)
+- battery (H200, same base side as champion): ifeval **-15.2** CI
+  [-18.9,-11.6] ⛔ (double the champion's -7.0), mbpp **-7.1** [-13.2,-1.1]
+  ⛔ (champion +1.3); gpqa/humaneval/math within noise of champion.
+- **VERDICT: REJECT 8192 — 4096 calib windows stay.** Probe (+2.93 vs
+  control +0.98 on GB10) called the direction; battery seals it with two
+  cliffs. Also settles regen doctrine: calib window 4096 for ARM3.
 
 ## ARM2 if3x — IF-appended dose (14.1%) @ 4096 vs gdnfix-head @ 4096
 
@@ -35,10 +51,15 @@ ifeval −14.6; gdnfix-head +2.33% / −13.7; champion +3.33% / −7.8.
   same-machine). GB10 control gdnfix-head: +2.33% / qNLL 1.4347
   (cross-machine caveat; ifeval battery decides the IF question —
   control domain tables were never persisted, aggregates only).
-- battery: RUNNING (t-mveu7sro→t-mveue9rs; first attempt died at 4min — GPQA is a
-  gated dataset, pod had no HF credential; token shipped + gpqa cached,
-  refired)
-- VERDICT: (pending)
+- battery (H200): ifeval **-14.2** CI [-17.9,-10.5] ⛔ — the IF dose
+  DOUBLED ifeval damage vs champion (-7.0). But mbpp **+10.3** [+4.8,+15.9]
+  ⬆ (largest gain on the board) and math500 **+5.4** [+0.6,+10.0] ⬆.
+  Note: probe had IF as the arm's best domain (+0.62% dPPL) — second
+  consecutive campaign where teacher-forced KL does NOT predict ifeval.
+- **VERDICT: REJECT for the IF purpose** (dose hurts its target). The
+  mbpp/math trade is real damage-shifting, not damage-fixing — logged as
+  a lead (cascade+IF-append recipe shifts quant damage from code/math
+  into IF), not a shippable recipe.
 
 ## 27B qwenfinals — built, held; canonical decision OPEN
 
@@ -56,7 +77,11 @@ ifeval −14.6; gdnfix-head +2.33% / −13.7; champion +3.33% / −7.8.
   copied verbatim from base).
 - **Published to PRIVATE holding repo** `nchapman/Qwen3.8-27B-W4A16-GPTQ-qwenfinals`
   (Hub LFS shas verified byte-exact; 81s upload). Card states lab-artifact
-  status, recipe, run provenance.
+  status, recipe, run provenance. Card corrected 07:00Z: calib teacher is
+  **Qwen3.8-flash** (OpenRouter, thinking on) — NOT 27B-self-authored as
+  first written (provenance.json is the truth: teacher
+  qwen/qwen3.8-flash@openrouter, t0.7/p0.95/k20, max_tokens 16384,
+  999 rows).
 - paired probe: CANNOT run on A100 (73GB resident + int8 decompress
   transients > 80GB — hard OOM at 25% decompress, t-mveumpnh). Queued to
   H200 tail after batteries (~09:10Z).
