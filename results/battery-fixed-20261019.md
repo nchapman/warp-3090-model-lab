@@ -9,6 +9,28 @@ Run dirs (pod-synced): `runs/battery-fixedR.20261019T155447Z.10387`
 (reasoning leg), `runs/battery-fixedD.20261019T154427Z.8858` (compliance
 leg), `runs/battery-fixedC.20261019T164651Z.13540` (code leg).
 
+## Paired-complete re-analysis of the v1 samples (2026-10-19, same 16k runs)
+
+Scoring the SAME samples on rows where both sides closed under the cap
+(`battery_report.py --gen_cap 16384`; truncation counted, never graded):
+
+- **gpqa −11.1 → pc +0.0 [−5.2,+5.2] (n=115 of 198).** The entire gpqa
+  cliff was truncation asymmetry (base 22% vs quant 36% cut), not
+  reasoning damage. On prompts both sides finish, quant = base exactly
+  (84.3 / 84.3).
+- **ifeval-think −7.6 → pc −3.4 [−6.9,−0.9] (n=116 of 541).** Real but
+  much smaller; heavy selection (only prompts where BASE finishes under
+  16k — easiest tail), so treat as biased-low estimate pending v2.
+- math500 +1.6 → pc +1.5 (truncation 5%/4% symmetric — unaffected).
+- nothink −1.7 → pc −1.7 (n=521; unchanged).
+
+**Reading:** the v1 "knowledge-heavy reasoning damage" signature was
+mostly cap asymmetry. What remains provable at 16k: a small ifeval-think
+delta plus a completion-rate cost (the quant thinks past the cap more
+often — itself a deployment-relevant damage mode, now measured as a
+length metric instead of silently graded). The 32k v2 rerun (champion +
+arms, shared instrument) decides with far less selection pressure.
+
 ## Instrument caveat (added post-run, 2026-10-19 — token-length audit)
 
 **Think-leg deltas still carry truncation asymmetry.** Token-count

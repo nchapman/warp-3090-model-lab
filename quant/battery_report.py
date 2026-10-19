@@ -153,6 +153,48 @@ def paired_bootstrap(diffs, n_boot=10000, seed=0):
     return means[int(0.025 * n_boot)], means[int(0.975 * n_boot)]
 
 
+def load_resp_lengths(side_dir, task, key, cap, tok):
+    """{doc_id: generated tokens} for a task's samples.
+
+    Tokenizes the STORED response (post think-strip). Closed-think rows
+    store only the answer (short); rows truncated at the generation cap
+    never closed, so the strip never fired and they store ~cap tokens of
+    raw reasoning — length>=cap-50 flags them. Same file/filter discipline
+    as load_samples so doc alignment holds.
+    """
+    pats = [f"samples_{task}_*.jsonl", f"samples_{task}.jsonl"]
+    paths = []
+    for pat in pats:
+        for hit in sorted(glob.glob(os.path.join(side_dir, "**", pat), recursive=True)):
+            core = os.path.basename(hit)[: -len(".jsonl")]
+            suffix = core[len(f"samples_{task}_"):]
+            if core == f"samples_{task}" or re.fullmatch(r"\d{4}-\d{2}-\d{2}T[\d.\-]+Z?", suffix):
+                paths.append(hit)
+    suffix = key.split(",", 1)[1] if "," in key else None
+    rows = {}
+    texts = []
+    for path in paths:
+        with open(path) as f:
+            for line in f:
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if "doc_id" not in rec or rec["doc_id"] in rows:
+                    continue
+                if suffix is not None and rec.get("filter") not in (None, suffix):
+                    continue
+                r = rec.get("resps") or []
+                if not r or not r[0]:
+                    continue
+                rows[rec["doc_id"]] = None
+                texts.append((rec["doc_id"], r[0][0] if isinstance(r[0], list) else str(r[0])))
+    for doc_id, chunk in zip([d for d, _ in texts],
+                             tok([t for _, t in texts], add_special_tokens=False)["input_ids"]):
+        rows[doc_id] = len(chunk)
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--base", required=True, help="lm-eval output dir (base side)")
@@ -160,7 +202,24 @@ def main():
     ap.add_argument("--json", default=None, help="write full report JSON here")
     ap.add_argument("--cliff_pt", type=float, default=5.0,
                     help="actionable |delta| threshold in points (default 5)")
+    ap.add_argument("--gen_cap", type=int, default=0,
+                    help="generation cap in tokens; when set, ALSO report "
+                         "paired-complete scoring (rows where BOTH sides "
+                         "finished under the cap) and per-side truncation "
+                         "rates — truncation becomes a measured length "
+                         "metric, never a graded miss (v2 protocol)")
+    ap.add_argument("--tokenizer", default="Qwen/Qwen3.5-4B",
+                    help="tokenizer for the truncation metric (needs "
+                         "transformers; runs fine from either lab venv)")
     args = ap.parse_args()
+
+    tok = None
+    if args.gen_cap:
+        try:
+            from transformers import AutoTokenizer
+        except ImportError as e:
+            sys.exit(f"--gen_cap needs transformers: {e}")
+        tok = AutoTokenizer.from_pretrained(args.tokenizer)
 
     base_path, base_res = load_results(args.base)
     quant_path, quant_res = load_results(args.quant)
@@ -206,11 +265,40 @@ def main():
         print(f"{task:34s} {name:24s} {n_str:>4s} "
               f"{b * 100:6.1f} {q * 100:6.1f} {delta:+6.1f} {ci:>17s} "
               f"{'YES' if cliff else ''}")
-        report["tasks"][task] = {
+        entry = {
             "metric": name, "metric_key": kb, "n_paired": len(common),
             "base": b, "quant": q, "delta_pt": delta,
             "ci_lo_pt": lo, "ci_hi_pt": hi, "cliff": cliff,
         }
+        # v2: truncation is a length metric, never a graded miss. Score the
+        # pair on rows where BOTH sides finished; report per-side cut rates.
+        if args.gen_cap and common:
+            bl = load_resp_lengths(args.base, task, kb, args.gen_cap, tok)
+            ql = load_resp_lengths(args.quant, task, kb, args.gen_cap, tok)
+            cut = args.gen_cap - 50
+            bcap = {i for i in common if bl.get(i, 0) >= cut}
+            qcap = {i for i in common if ql.get(i, 0) >= cut}
+            keep = [i for i in common if i not in bcap and i not in qcap]
+            pdelta = ((sum(qs[i] for i in keep) - sum(bs[i] for i in keep)) / len(keep)) * 100.0 if keep else None
+            plo, phi = paired_bootstrap([(qs[i] - bs[i]) * 100.0 for i in keep]) if keep else (None, None)
+            print(f"{'  pc (both sides complete)':34s} {'':24s} {len(keep):>4d} "
+                  f"{(sum(bs[i] for i in keep) / len(keep)) * 100:6.1f} "
+                  f"{(sum(qs[i] for i in keep) / len(keep)) * 100:6.1f} "
+                  f"{pdelta:+6.1f} [{plo:+.1f}, {phi:+.1f}]" if keep else
+                  f"{'  pc (both sides complete)':34s} {'':24s}    0  (no complete pairs)")
+            print(f"{'  trunc@cap':34s} base {len(bcap)}/{len(common)} "
+                  f"({100.0 * len(bcap) / len(common):.0f}%)  quant {len(qcap)}/{len(common)} "
+                  f"({100.0 * len(qcap) / len(common):.0f}%)  [length metric, not scored]")
+            entry |= {"n_paired_complete": len(keep),
+                      "pc_base": (sum(bs[i] for i in keep) / len(keep)) if keep else None,
+                      "pc_quant": (sum(qs[i] for i in keep) / len(keep)) if keep else None,
+                      "pc_delta_pt": pdelta, "pc_ci_lo_pt": plo, "pc_ci_hi_pt": phi,
+                      "trunc_base": len(bcap), "trunc_quant": len(qcap), "n_common": len(common)}
+            # decision metric under --gen_cap: paired-complete delta
+            delta, lo, hi = pdelta, plo, phi
+            cliff = abs(delta) >= args.cliff_pt and lo is not None and (lo > 0 or hi < 0)
+            entry["cliff"] = cliff
+        report["tasks"][task] = entry
         if worst is None or abs(delta) > abs(worst["delta_pt"]):
             worst = report["tasks"][task] | {"task": task}
     report["worst"] = worst
