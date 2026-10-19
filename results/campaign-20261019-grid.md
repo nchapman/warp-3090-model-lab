@@ -123,12 +123,44 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
 
 ## ARM3 4bself — self-authored finals vs gdnfix-qwenfinals (flash-authored)
 
-- regen: DONE-pending on H200 (GB10 first pass too slow: saturated but
-  bandwidth-starved, 650 tok/s). H200 pass launched 08:19:45Z
-  (run regen_calib_4bself.20261019T081945Z.95918, server pid 95943,
-  GPU_MEM_UTIL=0.9, CONC=128, same resumable script, calib sha
-  1c7964a0-verified on pod). GB10 pass left running as backup.
-- quant: (pending — @4096 windows per ARM1 verdict)
-- probe: (pending)
-- battery: (pending)
-- VERDICT: (pending)
+- regen: DONE 08:41:34Z on H200 (999 rows in 20 min, run
+  regen_calib_4bself.20261019T081945Z.95918; GB10 backup killed by
+  recorded pids 3558755/3558780 after TERM+KILL). Provenance:
+  teacher Qwen/Qwen3.5-4B@local-vllm, t0.7/p0.95/k20 thinking on,
+  max_tokens 16384, source=v1 (1c7964a0 verified). Calib sha
+  3c2aa215… synced to GB10 repo, MANIFEST-pinned (commit aa57760).
+- quant @4096: RUN_DONE 09:24:40Z (runs/quant-4b.20261019T090040Z.97716),
+  PREFLIGHT_DIV64_OK + assert_packed_div64 OK, model.safetensors sha
+  26013e963adb825f0044f8ba9e2c489dfdf7bcf47e1765abbed3946e198ea72d.
+- probe (H200): dPPL **+1.32%** (qNLL 1.4130), weightedKL 0.1137,
+  p99.9 19.51 — best 4B probe of the day (champion GB10 +3.33%, long8k
+  +2.93%, if3x +2.73%). swe +15.23% usual outlier.
+- battery (H200, same base side): ifeval **-12.6** CI [-16.5,-8.9] ⛔
+  (champion -7.0); gpqa -6.6 / humaneval -3.0 / mbpp -2.4 / math +1.2 —
+  all within CI noise. Exactly one cliff.
+- **VERDICT: REJECT 4bself — self-authored finals do not rescue IF.**
+  With flash@4B (-14.6 GB10), flash@27B (-20.7 H200), self@4B (-12.6):
+  EVERY regenerated-finals calib doubles ifeval damage vs cascade-v1
+  (-7.0 H200 / -7.8 GB10). The champion's Nemotron hand-authored finals
+  are load-bearing for IF. (Probe ranked this arm best — third
+  probe/battery inversion of the campaign.)
+
+## Verdict table
+
+| arm | recipe delta | probe dPPL | ifeval Δ (battery) | verdict |
+|---|---|---|---|---|
+| ARM1 long8k | calib windows 8192 | +2.93% | **-15.2** (mbpp -7.1 too) | **REJECT — 4096 stays** |
+| ARM2 if3x | IF dose 14.1% @4096 | +2.73% | **-14.2** (mbpp +10.3, math +5.4) | **REJECT for purpose** (damage-shift lead) |
+| ARM3 4bself | finals self-authored | **+1.32%** | **-12.6** | **REJECT — regenerated finals hurt IF at any authorship** |
+| 27b qwenfinals | finals flash-authored @27B | +0.28% | **-20.7** (humaneval -35.4) | **REJECT — incumbent cascade-v1 stays canonical** |
+| champion (ref) | cascade-v1 | +3.33% (GB10) | -7.0 (H200) / -7.8 (GB10) | ships |
+
+**Campaign conclusions:**
+1. Cascade-v1 @4096 wins every comparison — calib composition is
+   already optimal among tested deltas; all four levers (window, IF
+   dose, author flash, author self) made things worse on ifeval.
+2. Probe-v4 (teacher-forced KL/dPPL) ranked the two worst battery
+   artifacts as the two best probes — it cannot arbitrate calib
+   recipes; battery is the only decider.
+3. ifeval is the universal casualty of calib drift; code/math move
+   around (if3x bought mbpp +10.3) but IF only degrades.
