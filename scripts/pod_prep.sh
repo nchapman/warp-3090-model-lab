@@ -3,7 +3,15 @@
 #
 # Encodes the day-1 sequence so it is identical every time:
 #   survey  : GPU / CUDA / disk / python gates
-#   token   : ship HF_TOKEN from ~/.config/secrets.env quietly (stdin, never argv)
+#   token   : ship the HF token quietly (stdin, never argv) — prefer
+#             HF_TOKEN from ~/.config/secrets.env, fall back to the stored
+#             CLI token ~/.cache/huggingface/token (huggingface-cli login).
+#             Installed BOTH as /root/.cache/huggingface/token (what
+#             huggingface_hub/datasets auto-read in ANY process — gated
+#             datasets, private repos) and /root/.hub_env.sh via .bashrc
+#             (interactive shells). Non-interactive SSH (bash without
+#             SSH_SOURCE_BASHRC, i.e. Debian/Ubuntu) sources neither .bashrc
+#             nor hub_env — the stored-token file is the one that counts.
 #   sync    : rsync the repo EXCLUDING disposable testbed artifacts, behind a
 #             dry-run size guard (the 281GB smoke/ lesson: refuse > MAX_SYNC_GB
 #             of transfer without FORCE=1, and name the offenders)
@@ -53,15 +61,28 @@ SSH 'nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,nohead
 
 stage "token"
 if [[ ${SKIP_TOKEN:-0} != 1 ]]; then
+  # Resolve locally: secrets.env first, stored CLI token as fallback.
+  TOKEN_SRC="" TOKEN_VAL=""
   if grep -q '^HF_TOKEN=' "$HOME/.config/secrets.env" 2>/dev/null; then
-    # stdin, not argv; value never echoed into any log
-    grep '^HF_TOKEN=' "$HOME/.config/secrets.env" | sed 's/^/export /' \
-      | SSH "cat > /root/.hub_env.sh && \
-             touch /root/.bashrc && grep -q hub_env /root/.bashrc \
-             || sed -i '1i source /root/.hub_env.sh' /root/.bashrc" \
-      && echo "token installed (/root/.hub_env.sh, sourced from .bashrc)"
+    TOKEN_SRC="secrets.env"
+    TOKEN_VAL=$(grep '^HF_TOKEN=' "$HOME/.config/secrets.env" | head -1 | cut -d= -f2-)
+  elif [[ -s "$HOME/.cache/huggingface/token" ]]; then
+    TOKEN_SRC="stored CLI token (~/.cache/huggingface/token)"
+    TOKEN_VAL=$(tr -d '[:space:]' < "$HOME/.cache/huggingface/token")
+  fi
+  if [[ -n "$TOKEN_VAL" ]]; then
+    # stdin, not argv; value never echoed into any log. Bare value goes over
+    # the wire; the remote side derives both the stored-token file (root of
+    # huggingface_hub auth for every python process) and hub_env.sh.
+    printf '%s' "$TOKEN_VAL" | SSH 'umask 177; T=$(cat)
+        mkdir -p /root/.cache/huggingface
+        printf "%s" "$T" > /root/.cache/huggingface/token
+        printf "export HF_TOKEN=%s\n" "$T" > /root/.hub_env.sh
+        touch /root/.bashrc
+        grep -q hub_env /root/.bashrc || sed -i "1i source /root/.hub_env.sh" /root/.bashrc' \
+      && echo "token installed from ${TOKEN_SRC} (/root/.cache/huggingface/token + hub_env.sh via .bashrc)"
   else
-    echo "WARN: no HF_TOKEN in ~/.config/secrets.env — private repos will fail"
+    echo "WARN: no HF_TOKEN in ~/.config/secrets.env and no stored CLI token at ~/.cache/huggingface/token — gated/private pulls will fail"
   fi
 fi
 
