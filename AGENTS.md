@@ -137,6 +137,23 @@ paired-complete scoring (`battery_report.py --gen_cap`) excludes docs
 where either side capped (measured over-16k at 4B: ifeval 23–32%, gpqa
 4.5–6%, math 0.4%, code 0%; quant truncs more than base — the gap
 itself is damage). 8k cap ruled out (ifeval >54% would truncate).
+- **Battery noise floor (measured 2026-10-19, two independent base runs
+at identical config):** ifeval strict is format-robust and stable
+(0.2pt base-vs-base) — the trustworthy discriminator. gpqa
+flexible-extract swings ±9.6pt (only flexible-extract is nonzero;
+strict-match ≈0 for thinking models). **math500 is UNUSABLE for
+ranking on this instrument** — vLLM batch nondeterminism flips
+reasoning paths → answer-format flips → minerva strict AND math_verify
+swing 35–57pt base-vs-base (81.4/24.6 strict, 91.8/56.8 verify; 34.8%
+doc agreement). Never quote math500 battery deltas. Correction: earlier
+resps-proxy over-16k rates (ifeval 23–32%) undercounted — battery_report
+measures base 57–58% / champion 72% / v1rebuild 67% on ifeval.
+- **Probe↔battery calibration (first test, 2026-10-19):** probes RANKED
+champion≈v1rebuild (3.20/0.1087 vs 3.36/0.1094) but the battery shows
+v1rebuild has a real ifeval cliff (−35pt PC, noise floor 0.2) that the
+probe missed entirely. Probe-first tiering stands, but probe-negative
+≠ ship-safe: a shipping call needs at least the format-robust battery
+subset (ifeval + code tasks).
 
 **Measured anchors (τ @ t=0.7 n=4 unless noted):** 4B 5.2M supervised →
 1.05 flat (UNSOUND — off-policy artifact, see corpus section; do not
