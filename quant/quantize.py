@@ -189,12 +189,18 @@ def get_calibration_dataset(processor, calib, num_samples, max_seq_length,
 
 
 def build_recipe(algo, moe=False, full_bit_attn=False):
-    # vision tower, lm_head, and the GDN per-head gates stay BF16.
-    # in_proj_a/b are N=32 (dense 4B/9B) / N=48 (27B) — Marlin (SGLang)
-    # requires N % 64 == 0 on every packed tensor, so quantizing them breaks
-    # gptq_marlin_repack at load (found 2026-10-18 on the 27B); mainstream
-    # hybrid checkpoints leave them bf16. vLLM also fuses a+b into
-    # in_proj_ba — sub-kernel width. assert_packed_div64() guards exports.
+    # What stays BF16, and why (history matters here):
+    # - lm_head + vision tower: original policy (481316e, 10-13).
+    # - GDN per-head gates in_proj_a/b: BF16 for DENSE models only from
+    #   fc5be92 (10-16, MoE ignore), GLOBAL from d281deb (10-18) — two
+    #   reasons: N=32/48 breaks Marlin (SGLang) N%64 packing at load
+    #   (found on the 27B), and fused_N not div-64 broke per-group axis
+    #   alignment (early-layer Hessians exploded). Pre-10-18 artifacts
+    #   (the shipped 4B champion) have a/b W4: vLLM-servable, NOT
+    #   SGLang/Marlin-safe.
+    # - shared_expert (MoE only): always-on dense path, ~180MB.
+    # assert_packed_div64() guards exports; in_proj_a/b BF16 is a
+    # COMPAT requirement, not a precision choice — do not remove.
     ignore = ["lm_head", "re:.*visual.*",
               r"re:.*linear_attn\.in_proj_a$",
               r"re:.*linear_attn\.in_proj_b$"]
@@ -360,10 +366,12 @@ def _gptq_ignore(moe=False, full_bit_attn=False):
               r"re:.*linear_attn\.in_proj_a$",
               r"re:.*linear_attn\.in_proj_b$"]
     if full_bit_attn:
-        # precision-side ablation: EVERY attention projection (self_attn
-        # q/k/v/o + linear_attn in/out) stays BF16; MLP/experts stay W4.
-        # Regex matches any module path containing both 'attn' and 'proj'
-        # — self_attn.* and linear_attn.* only in Qwen3.5 hybrids.
+        # precision-side ablation (--full-bit-attn, a8c734f 10-19): the BIG
+        # attention projections (self_attn q/k/v/o + linear_attn qkv/z/out)
+        # stay BF16 too; MLP/experts stay W4. Distinct from the a/b compat
+        # ignore above: this one is a deliberate precision experiment,
+        # ~1.30B params (+1.9GB on 4B). Regex matches any module path with
+        # both 'attn' and 'proj' — self_attn.* and linear_attn.* only.
         ignore.append(r"re:.*attn.*proj.*$")
     return ignore + (["re:.*shared_expert.*"] if moe else [])
 
