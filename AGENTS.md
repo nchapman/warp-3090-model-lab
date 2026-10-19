@@ -122,6 +122,21 @@ token rollouts; report agree@1, exact@32, per-domain (the compounding
 regime; Unsloth Divergence-300-style). Teacher-forced KL (probe.py) is a
 different instrument — never average the two, compare per-domain
 directions.
+- **Battery tiering (2026-10-19, user doctrine):** the full capability
+battery is the 4B-tier instrument — it calibrates probe↔battery
+agreement. Larger models (27b flagship, 35b class) verify by PROBE
+first; battery only for anomalies or a contested shipping call.
+Rationale: larger models should be more quant-resilient; a 4-side
+battery at 27B dense ≈ $75–150/arm on one H200 (~1–2k tok/s), and probe
+ranking already transfers. If a big-model battery ever runs: reuse the
+base side, right-size hardware (A100-80 fits 27B BF16), reserve
+full-length ifeval/gpqa for the finalist.
+- **Battery protocol (v2, 2026-10-19):** generation cap 16384, mlen 20480;
+truncation-at-cap is a LENGTH metric, never a graded miss —
+paired-complete scoring (`battery_report.py --gen_cap`) excludes docs
+where either side capped (measured over-16k at 4B: ifeval 23–32%, gpqa
+4.5–6%, math 0.4%, code 0%; quant truncs more than base — the gap
+itself is damage). 8k cap ruled out (ifeval >54% would truncate).
 
 **Measured anchors (τ @ t=0.7 n=4 unless noted):** 4B 5.2M supervised →
 1.05 flat (UNSOUND — off-policy artifact, see corpus section; do not
