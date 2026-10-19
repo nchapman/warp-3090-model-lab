@@ -488,3 +488,34 @@ Ops notes: dequantized-W4A16 GGUFs built via convert_hf_to_gguf.py
 (--outtype f16 --no-mtp) on the f16 HF render. GB10 doctrine addendum:
 battery-grade vLLM serving and llama.cpp sweeps serialize on this box
 (measured 18.5 vs 13.6 s/prompt contended vs solo).
+
+## Same-box probe pass + attnbf16 precision arm (2026-10-19, H200 yav18d8q81klrr)
+
+Full table, per-domain rows, and receipts: `results/probe-h200-20261019.md`
+(row dumps `runs/probe_rows_h200-*.jsonl`). Headlines (current artifacts,
+one box, base NLL 1.3945 every run):
+
+| quant | dPPL | wKL |
+|---|---|---|
+| champion | +3.20% | **0.1087** |
+| **attnbf16** (cascade-v1, BF16 attn projections) | **+1.93%** | **0.0733** |
+| qwenfinals@4096 | +2.99% | 0.1128 |
+| if3x@4096 | +1.07% | 0.1106 |
+| 4bself@4096 | +0.48% | 0.1125 |
+
+- **Projection bitrate carries ~40% of dPPL / 33% of wKL** (attnbf16 vs
+  champion, uniform across all seven probe domains). Cost: +1.9GB
+  (+51%) — attention projections are ~32% of params in this hybrid.
+- **Rebuild drift measured** (if3x/4bself, same box/calib/recipe):
+  dPPL moves 0.8–1.7pt, wKL ±0.002 → dPPL margins <2pt between single
+  builds are not recipe evidence; four calib variants wKL-equivalent.
+- **Precision-era caveat**: the shipped champion is a PRE-d281deb build
+  (in_proj_a/b W4-packed; vLLM-servable, NOT SGLang/Marlin-safe); all
+  post-10-18 builds keep a/b BF16 (3.9M params, 0.1%). The rebuild arms'
+  layout is IDENTICAL to the 10-18 gdnfix arms whose battery read
+  −6pt ifeval vs champion (see GDN div-64 section above): the −6pt was
+  attributed to the a/b exclusion with calib confounded — `v1rebuild`
+  (v1 calib + a/b BF16, same day) is the clean third arm that split
+  runs. **Probe optimism about pristine projections is NOT battery
+  evidence — 10-18 already showed the two instruments diverge on
+  exactly this axis** (qf: best qNLL, worst ifeval).

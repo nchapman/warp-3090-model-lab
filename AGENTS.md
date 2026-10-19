@@ -187,6 +187,11 @@ from quant).
 ~/Code/llm-compressor/Qwen3.5-4B-W4A16-GPTQ-**cascade** (suffix REQUIRED);
 the unsuffixed dir there is an ablation-era leftover that ablations overwrote
 in place — never probe it as the champion.
+Champion era caveat (2026-10-19): the shipped champion is a PRE-d281deb
+build — its GDN in_proj_a/b are W4-packed (3.9M params): vLLM-servable,
+NOT SGLang/Marlin-safe. All post-10-18 builds keep a/b BF16 (compat
+requirement, see quantize.py ignore history). Champion-calib rebuilds
+under today's code are tagged `v1rebuild`.
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
 **Calib truth: cascade-v1 = 999 rows (truncated 4096 tok), 100%
 nvidia/Nemotron-Cascade-2-SFT-Data, stratified to the dataset's own card

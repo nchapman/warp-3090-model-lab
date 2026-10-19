@@ -5,6 +5,13 @@ doctrine: every number below is measured on this machine, including the
 champion re-anchor. Controls (GB10, 4096): gdnfix-qwenfinals +0.98% dPPL /
 ifeval −14.6; gdnfix-head +2.33% / −13.7; champion +3.33% / −7.8.
 
+NOTE (2026-10-19): this grid describes the CAMPAIGN-ERA artifacts. The
+arms were since rebuilt (different bytes; same-recipe rebuild drift is
+0.8–1.7pt dPPL) and re-probed same-box — current-artifact probe numbers
+live in `results/probe-h200-20261019.md`. Battery verdicts below were
+rendered under the 16k cap instrument and carry the think-truncation
+caveat (see battery-think-cap-confound doc).
+
 ## CHAMPION re-anchor (H200)
 
 battery pair vs H200 base (tasks n=198/164/541/378/500), run dirs
