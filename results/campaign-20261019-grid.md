@@ -31,8 +31,10 @@ comparable to GB10 controls; cross-machine caveat retired for this grid.
 > within-mode). Full record + receipts:
 > `results/battery-think-cap-confound-20261019.md`. Measured numbers in
 > this grid stand as measurements; every ifeval/gpqa verdict is pending
-> re-adjudication under the fixed protocol (trial running on H200).
-> Code legs (humaneval+/mbpp+) are unconfounded (0% think).
+> re-adjudication under the fixed protocol (trial COMPLETE: the
+> champion's ifeval cliff is think-mode damage — −7.0 with reasoning on
+> under a sound instrument, −1.7 ns with reasoning off — see the
+> confound doc). Code legs (humaneval+/mbpp+) are unconfounded (0% think).
 
 ## ARM1 long8k — qwenfinals calib @ 8192 vs gdnfix-qwenfinals @ 4096
 

@@ -68,19 +68,40 @@ All-task sweep (same pair):
 - The campaign grid's *measured numbers* stand as measurements; the
   verdict framing built on ifeval cliffs is pending re-adjudication.
 
-## Fixes under trial (H200, 2026-10-19, champion 4B pair, ifeval-only)
+## Fixed-battery trial — COMPLETE (H200, 2026-10-19, champion 4B pair, ifeval-only, n=541)
 
-- T1 `comp16k`: completion + 16384 cap. **RESULT: −11.8 CI [−15.7, −7.8]**
-  — WORSE than 4096-cap (−7.0 H200 / −7.95 GB10). Raising the cap does
-  not dissolve the cliff; letting think finish deepens it. The champion
-  ifeval cliff is real, not a truncation artifact.
-- T2 `chat16k`: chat template + 16k cap, thinking on — running.
-- T3 `chat16k-nothink`: chat template + 16k cap, `enable_thinking=False`
-  (lm-eval 0.4.13 passes it into `apply_chat_template`) — queued.
+| leg | protocol | base | quant | Δ | 95% CI | decomposition |
+|---|---|---|---|---|---|---|
+| T1 comp16k | completion, 16k cap, think on | 54.2 | 42.3 | **−11.8** | [−15.7,−7.8] | flips −10.2 + within −1.7; both-direct (n=140) −7.1 [−12.9,−2.1] |
+| T2 chat16k | chat template, 16k cap, think on | 50.8 | 43.8 | **−7.0** | [−10.5,−3.5] | 0/541 unclosed think BOTH sides — all within-mode, zero flips |
+| T3 chat16k-nothink | chat, 16k cap, `enable_thinking=False` | 83.0 | 81.3 | **−1.7** | [−4.3,+0.9] ns | **0/541 raw `<think>` tokens both sides — plumbing verified** |
 
-Winning condition becomes the battery default for generative tasks;
-code tasks stay completion. Full fixed rerun (champion pair, all tasks,
-both sides) follows the trial.
+Findings:
+
+1. **The champion's ifeval damage is think-mode damage.** Compliance
+   measured clean of reasoning (T3): −1.7, CI crosses zero. Reasoning-on
+   under a sound instrument (T2: untruncated, zero mode flips): −7.0.
+   The quant degrades the reasoning chains, not instruction-following.
+2. **Truncation FLATTERED the champion**: 4096-cap completion −7.0
+   (H200) / −7.95 (GB10) → 16k-cap completion −11.8. At 16k the
+   "direct" class absorbs closed-think chains and quant error compounds
+   across the longer reasoning (both-direct: −4.3 ns → −7.1 sig).
+3. **Completion mode is itself an amplifier**: same 16k cap, chat
+   template −7.0 vs completion −11.8 — spontaneous mode flips
+   (125+54/541) are a completion-mode phenomenon.
+4. Base-side measurement worth knowing: thinking costs the 4B BASE
+   32pt of ifeval strict acc (83.0 nothink vs 50.8 think-on).
+
+## Adopted fixed battery
+
+- **ifeval runs BOTH ways**: chat+nothink@16k (compliance instrument,
+  T3 protocol) AND chat+think@16k (reasoning-retention instrument, T2).
+- **gpqa / math500**: chat+think@16k (truncation removed; these tasks
+  need reasoning).
+- **humaneval+ / mbpp+**: stay completion@4096 (0% think — clean; and
+  chat template breaks lm-eval's execution grader).
+- Arm re-adjudication under this battery queued (recipes frozen,
+  ~20–35 min re-quant each on H200).
 
 ## Campaign re-adjudication status
 
