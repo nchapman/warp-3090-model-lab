@@ -18,9 +18,9 @@ fi
 # published artifact: today's 27b build lives in the PRIVATE holding repo
 # (incumbent cascade-v1 repo stays canonical — campaign verdict 2026-10-19);
 # verify its model.safetensors LFS sha256 matches the local receipt sha
-sha=$(grep -o '[0-9a-f]\{64\}' "$D/SHA256SUMS" 2>/dev/null | head -1)
-lfs=$(curl -sS -m 20 "https://huggingface.co/api/models/nchapman/Qwen3.8-27B-W4A16-GPTQ-qwenfinals/tree/main" \
-  | grep -o '"lfs":{[^}]*}' | grep -o '"oid":"sha256:[0-9a-f]*"' | head -4)
+sha=$(grep -E 'model\.safetensors$|model\.safetensors ' "$D/SHA256SUMS" 2>/dev/null | grep -o '[0-9a-f]\{64\}' | head -1)
+lfs=$(curl -sS -m 20 -H "Authorization: Bearer $(cat ~/.cache/huggingface/token 2>/dev/null)" "https://huggingface.co/api/models/nchapman/Qwen3.8-27B-W4A16-GPTQ-qwenfinals/tree/main" \
+  | grep -o '"oid":"[0-9a-f]\{64\}"' | grep -v '^$' | head -8)
 if [ -n "$sha" ] && echo "$lfs" | grep -q "$sha"; then :; else
   fail="$fail hf-not-published-or-sha-mismatch"
 fi
