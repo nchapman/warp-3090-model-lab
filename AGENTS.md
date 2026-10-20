@@ -121,7 +121,8 @@ IF 25 / Belebele 36) read by `quant/traj_probe.py` — paired greedy 32-
 token rollouts; report agree@1, exact@32, per-domain (the compounding
 regime; Unsloth Divergence-300-style). Teacher-forced KL (probe.py) is a
 different instrument — never average the two, compare per-domain
-directions.
+directions. Runbook: needs `.venv-quant` (the dflash venv lacks
+accelerate and crashes at load); ~11 min/leg on GB10 for the 4B.
 - **Battery tiering (2026-10-19, user doctrine):** the full capability
 battery is the 4B-tier instrument — it calibrates probe↔battery
 agreement. Larger models (27b flagship, 35b class) verify by PROBE
@@ -242,6 +243,13 @@ build — its GDN in_proj_a/b are W4-packed (3.9M params): vLLM-servable,
 NOT SGLang/Marlin-safe. All post-10-18 builds keep a/b BF16 (compat
 requirement, see quantize.py ignore history). Champion-calib rebuilds
 under today's code are tagged `v1rebuild`.
+New-class 4B artifacts (2026-10-20, all local in ~/Code/llm-compressor/):
+`Qwen3.5-4B-W4A16-GPTQ-v1rebuild` (cascade-v1 calib, current code — the
+publish candidate) and `Qwen3.5-4B-W4A16-GPTQ-gdnfix-qwenfinals` (teacher-
+authored finals: qwen/qwen3.8-flash via regen_calib_finals.py). Battery-gate
+verdict (n=541, chat16k-think, McNemar p=0.57): the healthy-quant family
+(champion / v1rebuild / qwenfinals) is FLAT — same-box traj ruler confirms
+(RESULTS.md 2026-10-20b). Calib-authorship swaps are probe-only screens.
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
 **Release metadata (2026-10-20, user decision):** every quant ships the
 CUSTOM release chat template (froggeric v22.5, byte-pinned as

@@ -1,7 +1,7 @@
 # python
 __pycache__/
 *.pyc
-.venv*/
+.venv*
 .pi/
 
 # run outputs
@@ -21,9 +21,11 @@ eval_*
 data-raw/
 
 # model weights
+# model weights (bare pattern: symlinks into the main checkout are not
+# directories, the trailing-slash form misses them)
 *.safetensors
 *.bin
-Qwen3*/
+Qwen3*
 quants/
 data/regen_*.jsonl
 ladder/context_pool
