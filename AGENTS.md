@@ -275,6 +275,22 @@ GB10 measured: conc 128, MTP off (spec-decode LOSES at saturation:
 313 vs 249 rows/min), GPU_MEM_UTIL=0.6. Historical: the champion's v1
 regen predates SERVING_PARAMS and lacked top_k.
 
+**Calib-authorship vocabulary + measured null (2026-10-20 — naming
+conflation burned us twice in one day; do not repeat).** The arms:
+- `gdnfix-qwenfinals` = TEACHER-authored finals (qwen/qwen3.8-flash
+  via OpenRouter, `regen_calib_finals.py`). NEVER call this "selfgen".
+- `4bself` = the ONLY true selfgen arm (4B base regenerates its own
+  finals, `regen_calib_self.sh`, calib-cascade-4bself.jsonl).
+- champion/v1rebuild lineage = curated cascade-v1 (Nemotron SFT).
+MEASURED: teacher-authored ≈ curated in deployment mode — ifeval chat16k
+same-base pairing, qf −8.7 vs v1r −7.4, paired McNemar exact p=0.57
+(RESULTS.md 2026-10-20). The probe gain was real (dPPL 0.98 vs 3.33)
+and transferred nowhere. Calib-authorship swaps are probe-only screens.
+Null discipline: when the paired test says no difference, the entry
+says no difference — no direction words ("worse"), no mechanism
+stories on unmeasured effects. 4bself remains unmeasured in
+deployment mode (artifact stranded on stopped H200 pod yav18d8q81klrr).
+
 **Literature idiom (verified from primary sources).** On-policy regen
 by the exact deployed target; one conv per sample (first-turn common);
 short or capped lengths (paper 3072; DSpark ≤1024); PerfectBlend =

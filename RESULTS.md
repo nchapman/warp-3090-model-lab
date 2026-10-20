@@ -600,11 +600,14 @@ BATTERY_CONFIG events; guard-clean pairing).
 
 (base 51.9; both legs same base run — no cross-run pairing.)
 
-**Gate decision: PARK.** qf is 1.3pt WORSE than v1rebuild with fully
-overlapping CIs — TEACHER-authored calib finals do not carry their
-probe advantage into deployment-mode ifeval. Calib-authorship swaps
-remain a probe-only screen (dPPL optimization), never a shipping
-argument. No wider battery warranted on this evidence.
+**Gate decision: PARK.** qf vs v1rebuild is a NULL: paired McNemar
+exact p=0.57 (53 vs 60 discordant docs of 541, same-base pairing) —
+statistically indistinguishable. Teacher-authored calib finals did
+NOT carry their probe advantage into deployment-mode ifeval
+(probe dPPL 0.98 vs 3.33 champion-era was real; deployment flat).
+Calib-authorship swaps are a probe-only screen — dPPL optimization
+without deployment transfer, never a shipping argument. No wider
+battery warranted on this evidence.
 
 Bonus results:
 - **v1rebuild anchor holds on a third host class**: −7.4 (4090) vs
