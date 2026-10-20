@@ -571,3 +571,43 @@ Decisions:
   without events skip the guard with a warning). arm2 (4bself full
   battery) was killed mid-run — its question (calib lottery vs
   systematic exclusion cost) is moot under this verdict.
+
+## 2026-10-20 — Selfgen single-test gate: PARKED (does not carry to deployment mode)
+
+One cheap decisive arm instead of a battery (pre-registered rule:
+selfgen real only if qf ≥5pt better than v1rebuild with CI separation).
+Fresh RunPod 4090 (gordhp95nvpnzt, US-NC-1, secure) — third host class
+after GB10/A100/H200; one box, one fresh base, both quants as-built
+(qf stock template, v1rebuild froggeric+champion genconfig — ≤0.5pt
+known metadata delta noted). Protocol: ifeval full 541, chat16k-think
+(chat_template=1, think on, max_model_len 20480, gen 16384, stamped in
+BATTERY_CONFIG events; guard-clean pairing).
+
+| arm | ifeval Δ (n=541) | 95% CI | paired-complete | trunc@cap |
+|---|---|---|---|---|
+| gdnfix-qwenfinals (selfgen calib) | **−8.7** | [−12.6, −4.8] | −0.9 [−4.5, +1.8] | 70% |
+| v1rebuild (anchor) | **−7.4** | [−11.3, −3.7] | +0.0 [−2.6, +2.6] | 69% |
+
+(base 51.9; both legs same base run — no cross-run pairing.)
+
+**Gate decision: PARK.** qf is 1.3pt WORSE than v1rebuild with fully
+overlapping CIs — selfgen calib authorship does not carry its probe
+advantage into deployment-mode ifeval. Selfgen remains a probe-only
+screen (dPPL optimization), never a shipping argument. No wider
+battery warranted on this evidence.
+
+Bonus results:
+- **v1rebuild anchor holds on a third host class**: −7.4 (4090) vs
+  −6.5 (H200) vs champion −7.6 (H200) — CIs overlap throughout;
+  instrument cross-host stability confirmed yet again.
+- **No probe↔battery inversion on this pair**: qf probe ≈ champion
+  (2.99 vs 3.20) and battery ≈ champion-class too. The 10-18
+  "inversion" claim (audit item #6) stays untested-in-deployment-mode
+  for the arms that motivated it; 4bself (probe +0.48, the strongest
+  selfgen signal) remains UNMEASURED in deployment mode — its artifact
+  is stranded on the stopped H200 pod disk.
+- pc deltas ≈ 0 for both arms, damage concentrated in cap-adjacent
+  rows — same instrument signature as the fixed battery.
+
+Receipts: runs/battery-selfgen-v-{base,qf,v1r}.* (events + raws,
+protocol-stamped), runs/selfgen-gate-20261020/ (paired reports).
