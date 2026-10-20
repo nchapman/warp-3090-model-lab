@@ -625,3 +625,27 @@ Bonus results:
 
 Receipts: runs/battery-selfgen-v-{base,qf,v1r}.* (events + raws,
 protocol-stamped), runs/selfgen-gate-20261020/ (paired reports).
+
+### traj-v1 ruler: v1rebuild + qwenfinals (2026-10-20b, GB10, greedy 32-tok)
+
+Same box/script/eval-set as the 10-17 champion ruler (`.venv-quant` —
+note: dflash venv lacks accelerate, crashes at load). 11 min/leg.
+Receipts: runs/traj_probe.20261020T{215132,220237}Z.*.
+
+| domain (n) | champ agr@1/exact | v1r | qf |
+|---|---|---|---|
+| OVERALL (301) | 0.827/0.239 | 0.821/0.266 | 0.831/0.296 |
+| swe (25) | 0.880/0.000 | 0.840/0.000 | **0.520**/0.000 |
+| terminal_agent (50) | 0.880/0.080 | 0.840/0.120 | 0.900/0.120 |
+| conv_agent (25) | 0.920/0.040 | 0.920/0.080 | 0.920/0.080 |
+| math (60) | 0.850/0.333 | 0.900/0.433 | 0.917/0.417 |
+| chat (40) | 0.875/0.350 | 0.875/0.375 | 0.925/0.475 |
+| ML belebele (36) | 0.444/0.083 | 0.417/0.139 | 0.500/0.222 |
+
+- Overall spread 5.7pt at n=301, no paired test (no row dumps) —
+  treated as noise-level; third instrument, same family-flat answer.
+- **Agentic cliff is a CLASS property**: swe/terminal/conv_agent
+  exact@32 ≈ 0–0.12 for all three quants vs 0.37–0.56 chat/math/IF.
+- Flag only (n=25, may be noise): qf swe agree@1 0.520 vs 0.880/0.840
+  — first-token divergence on half the swe rows, opposite direction
+  from its overall edge. exact@32 = 0.000 everywhere on swe regardless.
