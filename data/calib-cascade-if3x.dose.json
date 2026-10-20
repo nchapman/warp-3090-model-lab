@@ -1,0 +1,16 @@
+{
+  "recipe": "cascade-v1 + appended IF rows (dose variant)",
+  "dose": {
+    "v1_rows_kept": 999,
+    "if_in_v1": 52,
+    "if_appended": 104,
+    "if_total": 156,
+    "n_total": 1103,
+    "if_share": 0.1414
+  },
+  "source_calib": "/home/nchapman/Code/warp-3090-quant-lab-moe/data/calib-cascade-v1.jsonl",
+  "source_sha256": "1c7964a0c402691c489626f33030570b8a3b0edbaa7f4daa62543b97e3fda9bf",
+  "pool": "data-raw/cascade",
+  "seed": 0,
+  "out_sha256": "5ee0827325d6ae525c30429d955e0038c0eb8f130ec4dc47f74378d702d34341"
+}

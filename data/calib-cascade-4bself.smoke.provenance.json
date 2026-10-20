@@ -1,0 +1,23 @@
+{
+  "teacher": "Qwen/Qwen3.5-4B@local-vllm",
+  "api_base": "http://localhost:8141/v1",
+  "sampling": {
+    "temperature": 0.7,
+    "top_p": 0.95,
+    "top_k": 20,
+    "thinking": true
+  },
+  "seed_base": 20261018,
+  "max_tokens": 16384,
+  "source_calib": "/home/nchapman/Code/warp-3090-quant-lab-moe/data/calib-cascade-v1.jsonl",
+  "source_sha256": "1c7964a0c402691c489626f33030570b8a3b0edbaa7f4daa62543b97e3fda9bf",
+  "generated_utc": "2026-10-19T06:59:53Z",
+  "rows_requested": 3,
+  "rows_done": 3,
+  "rows_failed": 0,
+  "rows_length_capped": 0,
+  "cost_usd_est": 0.0,
+  "tokens_in": 350,
+  "tokens_out": 6843,
+  "note": "contexts byte-identical to source; only final assistant turn regenerated; tool-role msgs sent to API as user (frozen rows unchanged)"
+}
