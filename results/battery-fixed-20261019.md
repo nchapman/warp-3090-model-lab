@@ -1,5 +1,12 @@
 # Fixed battery — champion 4B pair (H200, 2026-10-19)
 
+> **Postscript (2026-10-20):** numbers here are mode-consistent within
+> runs and stand — but never pair them against numbers from other
+> runs/eras without checking run mode (the 10-19/20 verdict found a
+> chat-vs-completion cross-run mix that manufactured a false 10pt
+> cliff; runs now stamp protocol and the report guard hard-fails
+> mixes). Master audit: `results/battery-protocol-audit-20261020.md`.
+
 The think-truncation confound retraction
 (`results/battery-think-cap-confound-20261019.md`) adopted a fixed
 protocol; this is its first full run. Pair: `Qwen/Qwen3.5-4B` vs

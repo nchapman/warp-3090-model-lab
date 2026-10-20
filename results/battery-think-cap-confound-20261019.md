@@ -1,5 +1,11 @@
 # Capability battery think-cap confound — discovered 2026-10-19
 
+> **Superseded in part (2026-10-20):** this doc covers defect classes 1–2
+> (mode flips, cap truncation). A THIRD defect — cross-run mode mixing —
+> was found later the same week and retracts additional conclusions
+> (exclusion cost, IF-damage narrative). Authoritative claim-by-claim
+> standing: `results/battery-protocol-audit-20261020.md`.
+
 **Status: re-adjudication in progress.** This document records a major
 defect in `quant/capability_battery.sh` as run for every published
 capability number to date, and retracts the campaign doctrine that was

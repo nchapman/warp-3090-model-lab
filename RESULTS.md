@@ -86,16 +86,13 @@ confirmed by the harness's invalid-generation-flags warning in the run log.
 
 > **Methodology caveat (2026-10-19):** ifeval/gpqa numbers in this
 > section were measured under the think-cap confound (completion mode,
-> 4096-token cap, mode flips dominating the delta) — decomposed and
-> re-adjudication status in `results/battery-think-cap-confound-20261019.md`;
-> fixed-protocol rerun results in `results/battery-fixed-20261019.md`.
-> **Update (same day, later):** the "fixed" 16k rerun was ALSO
-> truncating (57%/72% of ifeval-think rows at cap; the marker check
-> used to clear it is blind for chat-template legs). Current
-> paired-complete truth: gpqa +0.0, ifeval-think −3.4, math/nothink/
-> code unchanged — the earlier "damage = knowledge-heavy reasoning"
-> signature is refuted; authoritative rerun is the v2 battery (32k cap,
-> paired-complete scoring).
+> 4096-token cap, mode flips dominating the delta) — decomposed in
+> `results/battery-think-cap-confound-20261019.md`.
+> **FINAL STANDING (2026-10-20):** numbers below are REGIME measurements
+> (comp-4096), never deployment claims. Deployment-mode champion anchors:
+> chat-think −7.6 / nothink −1.7 / paired-complete −3.4. Full claim-by-claim
+> adjudication: `results/battery-protocol-audit-20261020.md` — read that
+> before quoting anything from this section.
 
 > Provenance corrected 2026-10-18: run logs carry `/root/.cache/huggingface`
 > paths — this battery ran on the A100 pod, not GB10 (mis-labeled when the
@@ -393,11 +390,17 @@ What GPTQ actually sees (4096-token window, 120-row sample, tokens):
 
 ### Capability battery — gdnfix arms + champion cross-host control (2026-10-18, RunPod A100 SXM 80GB, greedy t=0)
 
-> **Methodology caveat (2026-10-19):** ifeval numbers below carry the
-> think-cap confound — see `results/battery-think-cap-confound-20261019.md`.
-> Both the 4096-completion and the 16k-chat instruments truncate
-> think-mode generations asymmetrically; paired-complete scoring is the
-> current protocol (`results/battery-fixed-20261019.md`).
+> **RETRACTED (2026-10-20) — two of the three findings below.** The
+> "~6pt ifeval cost of the exclusion" and the "keep in_proj IN /
+> spend bits instead" implication are cross-protocol artifacts (era-1
+> mode flips + era-3 cross-run mode mixing — the champion readings
+> compared here are completion-era, and the whole story failed
+> matched deployment-mode replication). Verdict: exclusion costs ≈0 vs
+> champion (v1rebuild −6.5 vs −7.6, n=541) and is RETAINED.
+> "Probe wins do not carry" is WEAKENED to untested: its selfgen
+> ifeval cells were era-1 and were never rerun in deployment mode.
+> Numbers below stand as comp-4096 regime measurements only.
+> Master audit: `results/battery-protocol-audit-20261020.md`.
 
 Same rig as the champion battery (humaneval_plus, mbpp_plus, ifeval,
 minerva_math500, gpqa_diamond; full n; think-strip; lm-eval 0.4.13;
@@ -524,9 +527,14 @@ one box, base NLL 1.3945 every run):
   −6pt ifeval vs champion (see GDN div-64 section above): the −6pt was
   attributed to the a/b exclusion with calib confounded — `v1rebuild`
   (v1 calib + a/b BF16, same day) is the clean third arm that split
-  runs. **Probe optimism about pristine projections is NOT battery
-  evidence — 10-18 already showed the two instruments diverge on
-  exactly this axis** (qf: best qNLL, worst ifeval).
+  runs. **RETRACTED (2026-10-20):** the −6pt attribution was a
+  cross-protocol artifact, not exclusion cost — matched deployment-mode
+  arms exonerated the exclusion (see 10-20 verdict below and
+  `results/battery-protocol-audit-20261020.md`); **Probe optimism is NOT
+  battery evidence** — but note the 10-18 "divergence" citation (qf:
+  best qNLL, worst ifeval) was an era-1 completion cell and is UNTESTED
+  in deployment mode (selfgen battery never ran); the doctrine stands
+  on principle, not on that datapoint.
 
 ## 2026-10-20 — VERDICT: rebuild "damage" was a cross-protocol artifact; exclusion retained
 

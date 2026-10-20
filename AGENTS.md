@@ -148,6 +148,13 @@ itself is damage). 8k cap ruled out (ifeval >54% would truncate).
   battery_report.py HARD-FAILS cross-protocol pairing. Matched-mode
   verdict: v1rebuild is champion-class (−6.5 as-built vs −7.6 champion,
   n=541) — a/b BF16 exclusion retained, no rebuild needed.
+- **Battery-number hygiene (2026-10-20, user doctrine):** quote mode
+  with every battery number (comp-4096 / comp-16k / chat16k-think /
+  chat16k-nothink); never mix modes in one comparison; completion-mode
+  numbers are regime diagnostics, never deployment claims. Pre-10-20
+  runs carry no protocol stamp — verify mode from run logs before
+  pairing. Authoritative standing of every historical battery claim:
+  `results/battery-protocol-audit-20261020.md`.
 - **Battery noise floor (measured 2026-10-19, two independent base runs
 at identical config):** ifeval strict is format-robust and stable
 (0.2pt base-vs-base) — the trustworthy discriminator. gpqa
