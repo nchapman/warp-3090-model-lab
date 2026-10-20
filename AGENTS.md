@@ -4,6 +4,12 @@ Project-specific doctrine for any agent (or human) working in this repo. The
 global engineering guidelines still apply; this file adds what this lab
 learned the hard way.
 
+**Maintenance contract:** every number below cites instrument, temp, and n.
+When a new instrument, artifact, or decision lands, its line here changes in
+the same commit. A doctrine file that lags the repo is worse than none —
+"no multi-domain eval exists" survived three days after `bench_subsets.sh`
+shipped, and misinformed a planning session.
+
 ## Runs and processes
 
 - Every eval/server/training run goes through `lib/runlib.sh` (bash) or
@@ -29,15 +35,18 @@ learned the hard way.
   three purposes:
   - **t=0 (greedy)** — the low-noise instrument (repeat spread ~0.05). Use to
     sanity-check stability, not to pick shipping checkpoints.
-  - **t=0.7 (serving)** — the deployment point and the corpus generation
-  config. **Selection happens here**, n≥4 per contender (spread ~0.1).
+  - **t=0.7 (serving)** — the deployment point and the selection temperature.
+  **Selection happens here**, n≥4 per contender (spread ~0.1).
   - **t=1.0** — heavy-tailed (0.34 spread observed on identical inputs).
   Never rank checkpoints on small n at t≥0.7; never quote a single draw as a
   result. Report n and ranges with every number.
 - Ranking is temperature-dependent. State the temperature with every τ. A
-  checkpoint that wins at greedy may lose at serving — that's data, not error.
-- Fresh GB10 numbers are the lab's anchors (`RESULTS.md`). Don't publish
-  cross-machine τ comparisons; don't resurrect superseded numbers.
+  checkpoint that wins at greedy may lose at serving — that's data, not error
+  (rung 1 is the canonical case: greedy improved 3.407 (t=0, n=1) →
+  4.157 (t=0, n=2) while serving sat flat at ~1.05, t=0.7 n=4).
+- Fresh GB10 numbers (or same-machine re-anchors) are the lab's anchors
+  (`RESULTS.md`). Don't publish cross-machine τ comparisons; don't resurrect
+  superseded numbers.
 
 ## Publishing
 
@@ -67,9 +76,9 @@ learned the hard way.
   venv build, speculators patches, GPU check, model pulls. Re-anchor any
   baseline on the pod itself before comparing numbers across machines.
 
-- Two venvs: `.venv-quant` (torch 2.14.1 / llmcompressor), `.venv-dflash`
-  (torch 2.13.0 / speculators 0.8.1 / vllm 0.31.0). `vllm serve` needs the
-  venv's bin on PATH.
+- Two venvs: `.venv-quant` (torch 2.14.1 / llmcompressor 0.14.1a),
+  `.venv-dflash` (torch 2.13.0 / speculators 0.8.1 / vllm 0.31.0).
+  `vllm serve` needs the venv's bin on PATH.
 - Everything caches via standard `~/.cache/huggingface`. No repo-local model
   litter; transient outputs are disposable and stay out of git.
 - Frozen data in `data/` is load-bearing for every published number —
@@ -87,35 +96,45 @@ supervised** (1.93× exchange). `drafter/data_audit.py` measures all of
 these — run it, never guess.
 
 **Corpus** (`data/context_pool.jsonl`, sha-pinned; read-only copy of the
-v4 regen input): 145,018 rows / ~100K convs / 260M nominal. **THIS FILE IS THE REGEN
-INPUT, NOT A CORPUS** — it is slice_a+slice_b regrouped by conversation:
-bare contexts, every row ends user/tool, ZERO regenerated responses.
-The final assistant turn of every conversation is absent; single-turn
-rows (51% of file — ALL math + science, plus 60K chat/IF/agent) carry no
-supervision at all and are dropped by prep. The true corpus (contexts +
-on-policy finals; what the champion trained on) was pod-side
-/root/dflash_data_v4 and is GONE with the pod — only regen inputs and
-the champion ckpt survive.
+v4 regen input): 145,018 rows, every row ends user/tool, ZERO regenerated
+responses. **THIS FILE IS THE REGEN INPUT, NOT A CORPUS.** The final
+assistant turn of every conversation is absent; single-turn rows (51% —
+ALL math + science, plus 60K chat/IF/agent) carry no supervision at all
+and are dropped by prep. The champion's exact pod-side MERGED corpus
+is gone, but its ingredients all survive locally: contexts here + the
+recovered regen lineage — `data/regen_4b{,_final,_sft,_opd}.jsonl` +
+empty errors receipt (0 errors), synced pod→local 2026-10-16 (06b1890),
+sha-pinned in data/MANIFEST.sha256, dual-homed in the main checkout
+(disk-only blobs, same pattern as context_pool.jsonl). Byte-exact prep
+is NOT recoverable; rebuild from ingredients if ever needed. The next
+corpus is built fresh per the campaign spec below.
 - Mix — the file's row labels (chat 65/math 12.5/science 8/…) describe
-  PROMPT POOL composition, not training data. Ladder-side effective mix
-  (supervised tokens in context turns): chat ~87% / agents ~11%; math 0,
-  science 0 (single-turn → no supervision). Champion-side mix includes
-  regenerated finals (rate unknown, node logs gone). Code ≈ 6% of
-  context content (measured).
-- **τ 1.05 (rung 1) is NOT a clean dead-zone number**: it trained
-  off-policy (source responses only, zero on-policy finals) and scored
-  BELOW the epoch-0 control (3.407) — distribution-mismatch signature,
-  volume confounded with data-kind. Re-measure on regen-fixed corpus
-  before quoting it.
+  PROMPT POOL composition, not training data. Ladder-side effective mix:
+  chat ~87% / agents ~11% / IF ~2%; math 0, science 0 (single-turn → no
+  supervision). Code ≈ 6% of context content (measured).
 - Length: mean 2,115 / median 1,676 / p90 4,588 / p99 6,207 tokens —
-**uncapped**; DFlash paper spec caps at 3072. DSpark reference preps ≤1024.
+  **uncapped**; DFlash paper spec caps at 3072, DSpark reference ≤1024.
 - Shape tooling: `drafter/reshape_tokens.py` (prefix/merged/first/short),
-`prep_dataset.py --loss-mode all|last --max-tokens N` (drop cap).
+  `prep_dataset.py --loss-mode all|last --max-tokens N` (drop cap).
+- Full corpus narrative: `docs/data_scaling.md`.
 
-**Eval.** `data/ladder-20.jsonl` is GENERAL CHAT ONLY — every τ ever
-quoted (incl. champion 3.79) is general-chat τ. No code/agentic/long
-eval exists. Don't claim deployment relevance without one. The
-agentic/long *quant-damage* ruler exists since 2026-10-17:
+**Eval instruments** (two exist; long-context: none yet — don't claim
+deployment relevance on long inputs without building one):
+- `data/ladder-20.jsonl` + `drafter/eval_ladder.sh` — GENERAL CHAT ONLY;
+  the selection instrument (t=0.7, n≥4). Every ladder-quoted τ (incl.
+  champion 3.79) is general-chat τ.
+- `drafter/bench_subsets.sh` — multi-domain profile: RedHatAI
+  speculator_benchmarks, 9 subsets / 924 prompts, revision-pinned
+  `2ae86af` (repins are logged, never silent), t=0 default, interval-
+  weighted τ from vLLM logs; `TEMP`/`SUBSET_N`/`SPEC`/`FLOOR_PER_PROMPT`
+  envs. GB10 confirmed profile (2026-10-14, n=2): champion weighted
+  **4.65** vs native MTP k=3 **3.21**, wins 9/9 — strongest
+  math_reasoning 6.64 / HumanEval 4.85 / rag 5.03; weak tail translation
+  +0.08 (chat-heavy-corpus signature). (A first-pass read of 4.16/3.26
+  8/9 was superseded by the fixed-window pass — quote 4.65/3.21.)
+
+**Quant-damage instruments** (battery + rollout ruler; the deployment
+side, distinct from the τ instruments above). The rollout ruler:
 `data/traj-v1.jsonl` (301 rows, agentic 100 / math 60 / chat+long 80 /
 IF 25 / Belebele 36) read by `quant/traj_probe.py` — paired greedy 32-
 token rollouts; report agree@1, exact@32, per-domain (the compounding
@@ -167,32 +186,57 @@ swing 35–57pt base-vs-base (81.4/24.6 strict, 91.8/56.8 verify; 34.8%
 doc agreement). Never quote math500 battery deltas. Correction: earlier
 resps-proxy over-16k rates (ifeval 23–32%) undercounted — battery_report
 measures base 57–58% / champion 72% / v1rebuild 67% on ifeval.
-- **Probe↔battery calibration (first test, 2026-10-19):** probes RANKED
-champion≈v1rebuild (3.20/0.1087 vs 3.36/0.1094) but the battery shows
-v1rebuild has a real ifeval cliff (−35pt PC, noise floor 0.2) that the
-probe missed entirely. Probe-first tiering stands, but probe-negative
-≠ ship-safe: a shipping call needs at least the format-robust battery
-subset (ifeval + code tasks).
+- **Probe↔battery predictive power: UNMEASURED (2026-10-20 framing).**
+The 10-19 "−35pt PC cliff the probe missed" was a cross-mode artifact
+(matched-mode verdict: −6.5, champion-class); the clean test is the
+10-20 gate — probes ranked qf far better, battery/McNemar said null
+(p=0.57). That is ONE null pair, not a refutation: probe→battery
+predictive power is unmeasured in both directions (negative direction
+never cleanly tested; earlier non-correlations were protocol defects,
+see the audit). Probe-first tiering stands; probe-negative ≠ ship-safe
+(a shipping call needs the format-robust subset: ifeval + code).
 
-**Measured anchors (τ @ t=0.7 n=4 unless noted):** 4B 5.2M supervised →
-1.05 flat (UNSOUND — off-policy artifact, see corpus section; do not
-quote as a dead-zone number); 4B ~150M → **3.79**; epoch-0 control 3.407.
-0.8B: 0.7M → 1.024, 3.5M → 1.08–1.09 (n=1) — dead zone extends to ≥3.5M at
-0.8B; MTP k=15 untrained head = 2.868 on the same ladder (the bar a
-trained 0.8B drafter must beat). External: DSpark 100K prompts ≤1024 →
-3.41; DFlash 100K-sample ablations → 4.9–5.6 greedy. Dead zone < ~5M
-supervised (two sources); known-good 20–60M; rising to ~1B (DFlare).
+**τ bars and the dead-zone map** (τ @ t=0.7 n≥4, ladder-20, unless noted;
+external references — full provenance in `docs/external_references.md`):
+- **THE BAR: untrained MTP head = 2.868** (4B quant's native MTP,
+  **k=3**, ladder-20 @ t=0.7, single run, GB10 — `results/results.csv`
+  `spec=mtp-k3`; consistent with the GB10 anchor table's k=3 → 2.86).
+  Naming trap: the producing run is named `mtp-15` because `eval_mtp.sh 15
+  8151` consumed the 15 as the run NAME — arg 3 is SPEC (default 3, capped
+  at 8). "MTP k=15" never existed; every doc that said so was citing the
+  run name. Quoted as the floor in every later campaign incl. the B200
+  closeout (not re-measured there). Any shipped drafter must beat it;
+  nothing at ≤1.4 ships.
+- **Reference recipes:** DSpark-class ≥3.41 (citation under reconciliation —
+  paper trains 1.3M prompts/10 epochs, chat τ 3.29–3.64; resolve before
+  quoting externally, `docs/external_references.md` §7); DFlash paper
+  100K-sample ablations → 4.9–5.6 greedy.
+- Dead zone: <~5M supervised (two sources); known-good 20–60M; rising to
+  ~1B (DFlare). 0.8B: 0.7M → 1.024, 3.5M → 1.08–1.09 (n=1) — dead zone
+  extends to ≥3.5M at 0.8B.
+- Rung 1 (4B, 5.2M supervised): **not a clean dead-zone number** —
+  off-policy data (source responses only). At t=0.7 it sat flat at 1.05
+  across all epochs (n=4) while its greedy sweep *improved* over the
+  epoch-0 control (3.407→4.157, t=0, n=1 vs n=2) — greedy gains that
+  don't transfer to serving are the distribution-mismatch signature. Do not quote as a
+  dead-zone datapoint.
+- Historical only, do not chase: a 4B run reached 3.79 @ t=0.7 n=4 (GB10;
+  pod re-anchor 3.714 n=4) — proof the recipe-class can reach ≥3.7, and
+  nothing more.
 
-**Loss-weighting footgun:** speculators 0.8.1 defaults dflash to
-`--per-position-loss-weight dpace` — the documented γ=7 static decay runs
-only when pinned (all our scripts pin it; unpinned commands silently train
-D-PACE weights). Draft-OPD trainer patch is inert without opd_ columns —
-default SFT path unaffected (docs/draft_opd.md).
+**Loss-weighting footgun** (speculators 0.8.1, `schema.py`): unset
+`--per-position-loss-weight` → **dpace for plain `dflash`**, fixed-exp-decay
+for dflash2/dspark — BUT `--dflash-decay-gamma` defaults to **4.0**, so the
+documented γ=7 static recipe still requires pinning the flag. All our
+scripts pin both explicitly (champion lineage = fixed-exp-decay γ7; dpace
+additionally requires `--loss-fn=ce`). Draft-OPD trainer patch is inert
+without opd_ columns — default SFT path unaffected (`docs/draft_opd.md`).
 
 **Trainer behavior.** Multipack sampler re-shuffles per epoch (seed+epoch)
 → epoch step-counts vary (rung 1: 1,310–1,850+); `step_ms` excludes
 inter-step overhead — wall is ~1.7–2× step_ms. Plan in hours/epoch
-(GB10: ~3.5h per 10M nominal), never in step counts.
+(GB10: ~3.5h per 10M nominal; B200: 111 min at 197.5M total), never in
+step counts.
 
 **GB10 reality.** Bandwidth-starved (~17.6× off H200): extraction and
 training both ~2k tok/s class. nvidia-smi memory reads [N/A]; 30–70W
@@ -201,39 +245,25 @@ at 96% util is normal load, not idle. A hung nvidia-smi can hold
 memory (121 GiB, CPU+GPU shared): vLLM's default 0.9 gpu-mem-util
 reserves ~109 GiB and OOM-kills the whole userspace once client load
 lands (2026-10-16: pipewire/llama-swap/session died mid-run). Always
-serve with an explicit --gpu-memory-utilization ≤ 0.6 (all serve sites
-default GPU_MEM_UTIL=0.6; env-overridable — use 0.9 on dedicated pod
-hardware) — the box is shared with llama-swap and a
+serve with an explicit --gpu-memory-utilization ≤ 0.6 (every serve
+script defaults GPU_MEM_UTIL=0.6; env-overridable — use 0.9 on dedicated
+pod hardware) — the box is shared with llama-swap and a
 desktop session.**
 
-**Unified-memory big-load doctrine (2026-10-17, cost: 3 dead runs + 2
-desktop sessions).** Any >30GB model load on this box needs ALL of:
-- `HF_DEACTIVATE_ASYNC_LOAD=1` — transformers 5.x async load (4 reader
-  threads) piles completed CPU tensors into converter futures → ~2×
-model footprint → OOM at ~45%. Default in quant/run_quant.sh.
-- The mem_guard fence (runlib.sh, `MEM_GUARD_MB`): GPU-side allocations
-  are INVISIBLE to RSS and to the kernel OOM killer's scoring — under
-  pressure it shoots random userspace while the 67GB-holder shows
-  rss=21MB. /proc/meminfo MemAvailable DOES see unified allocations;
-  guard kills OUR pid before the kernel fires. EVERY GPU-touching probe
-  or run gets a floor — no exceptions (an unfenced probe killed the
-  desktop again on 2026-10-17).
-- Page-cache hygiene during load: `scripts/evict_load_cache.py` (loop)
-  + PAGE_CACHE_EVICT (post-load, in quantize.py) — just-read base
-  shards sit in cache NEXT TO the resident copy unless dropped.
-- NEVER load big MoE via baseline transformers `from_pretrained` here:
-its weight_mapping merges ALL experts into ONE ~70GB tensor (watched
-it request 70,214,746,112 bytes with 21.8GB free). The llmcompressor
-`load_quantizable_moe` wrap path linearizes per-layer (~1.6GB
-transients) and never mega-allocs — use it for 35B-class loads.
-
-**Models registry.** `models.py` keys — six, not four: 4b (champion,
-taps_v4 [2,10,17,24,29,32]), 0.8b (testbed, taps [2,8,12,16,20,24],
-local quant `Qwen3.5-0.8B-W4A16-GPTQ/`), 9b, 27b (taps UNVALIDATED),
-35b (Qwen3.6-35B-A3B MoE, quant published 2026-10-17, no taps —
-drafter tooling untested), 35b-ornith (Ornith-1.5-35B-A3B,
-cross-lineage fork, quant published 2026-10-17, vision tower excluded
-from quant).
+**Models registry** (`models.py` — single source of truth for per-model
+facts). Keys — six: 4b, 0.8b, 9b, 27b, 35b, 35b-ornith.
+- `4b` — imported champion ckpt, taps_v4 [2,10,17,24,29,32]. RETIRED as
+  any kind of spec (2026-10-18, main-line closeout): warm-start source
+  ONLY; the shipped champion quant predates it.
+- `0.8b` — testbed, taps [2,8,12,16,20,24], local quant
+  `Qwen3.5-0.8B-W4A16-GPTQ/` at repo root.
+- `9b` — init config built, never trained.
+- `27b` — taps UNVALIDATED; measured NO-GO (bounded upside vs ~5× pod
+  cost).
+- `35b` — Qwen3.6-35B-A3B MoE, quant published 2026-10-17, no taps —
+  drafter tooling untested.
+- `35b-ornith` — Ornith-1.5-35B-A3B, cross-lineage fork, quant
+  published 2026-10-17, vision tower excluded from quant.
 4B artifact warning (2026-10-17): the champion calib-recipe artifact lives in
 ~/Code/llm-compressor/Qwen3.5-4B-W4A16-GPTQ-**cascade** (suffix REQUIRED);
 the unsuffixed dir there is an ablation-era leftover that ablations overwrote
@@ -269,19 +299,31 @@ v1-repro` rebuilds the frozen calib AND its day-0 probe companion byte-exact
 from data-raw/cascade/ (gitignored raw pool, 21 shards first/mid/last per
 subset, hash-pinned in data/MANIFEST.raw-pools.sha256); the same mode is the
 tuning entry point — change --seed/targets for new variants, calib mode for
-leak-proof sets. Deliberate remixes all lost to the card mix: v2 agentic×3
-0.1120, v3 agentic×1.5+ML 0.1123, perfectblend 0.1432. All quants share this
-lineage.**
+leak-proof sets. (The script's DEFAULT CARD_TOTALS mode re-derives the card
+mix rather than reproducing the frozen file — `--mode v1-repro` is the exact
+path; superseded main's old "provenance gap" note.) Deliberate remixes all
+lost to the card mix: v2 agentic×3 0.1120, v3 agentic×1.5+ML 0.1123,
+perfectblend 0.1432. All quants share this lineage.**
 
-**Regen doctrine (the standing per-model process).** Contexts are the
-shared invariant; every target model regenerates finals ON-POLICY with its
-deployed quant: `drafter/regen_pool.sh <model-key>`. Sampling =
-`models.py SERVING_PARAMS` (t 0.7 / top_p 0.95 / top_k 20 — the deployment
-point + DFlash2 distribution pair), also stamped into every quant's
-generation_config.json at quant time. Outputs land in `data/` (this repo).
-GB10 measured: conc 128, MTP off (spec-decode LOSES at saturation:
-313 vs 249 rows/min), GPU_MEM_UTIL=0.6. Historical: the champion's v1
-regen predates SERVING_PARAMS and lacked top_k.
+**Regen doctrine.** Contexts are the shared invariant; every target model
+regenerates finals ON-POLICY with its deployed quant:
+`drafter/regen_pool.sh <model-key>`. Generator config follows the
+reference idiom — **t 0.7 / top_p 0.95, NO top_k**, stated length cap,
+one conv per sample, minimum-valid-tokens filter ON. CAUTION:
+`regen_pool.sh` as committed still stamps `models.py SERVING_PARAMS`
+(t 0.7 / top_p 0.95 / **top_k 20**) into the generator — the exact
+deviation the 2026-10-17 closeout flagged (~$170 lesson; serving params
+in a data generator is an untested divergence from every reference, and
+`models.py`'s "consumed by regen" docstring predates the lesson).
+Parameterize the generator config before the next campaign. Outputs land
+in `data/` (this repo), sha-pinned. GB10 measured: conc 128, MTP off
+(spec-decode LOSES at saturation: 313 vs 249 rows/min),
+GPU_MEM_UTIL=0.6. This finals-only process is **v4 lineage**; the
+Open-PerfectBlend campaign replaces it with full sequential regen —
+every assistant turn, history rebuilt wave by wave (see Next
+campaign) — same generator idioms (t 0.7 / top_p 0.95, no top_k,
+stated cap), but prep-side knobs are stock speculators defaults
+(`--seq-length` 8192, `--minimum-valid-tokens` OFF).
 
 **Calib-authorship vocabulary + measured null (2026-10-20 — naming
 conflation burned us twice in one day; do not repeat).** The arms:
@@ -297,10 +339,60 @@ and transferred nowhere. Calib-authorship swaps are probe-only screens.
 Null discipline: when the paired test says no difference, the entry
 says no difference — no direction words ("worse"), no mechanism
 stories on unmeasured effects. 4bself remains unmeasured in
-deployment mode (artifact stranded on stopped H200 pod yav18d8q81klrr).
+deployment mode (artifact lost 2026-10-20 — the parked H200 pod was
+deleted; arm rebuildable from the banked calib + regen_calib_self.sh).
 
 **Literature idiom (verified from primary sources).** On-policy regen
 by the exact deployed target; one conv per sample (first-turn common);
 short or capped lengths (paper 3072; DSpark ≤1024); PerfectBlend =
  ecosystem default mix and NOBODY ablates mix; `minimum-valid-tokens`
 filter (speculators) — we lack it.
+
+**Next campaign (decided 2026-10-17/18) — reference conformance first.**
+- Data source = **Open-PerfectBlend** (HF `mlabonne/open-perfectblend`,
+  apache-2.0, ~1.3M samples, ShareGPT `conversations` + per-row `source`
+  column for stratification): public, sha-pinnable, rebuildable, and
+  DSpark's corpus — kills data variability. User turns verbatim;
+  assistant turns regenerated by the deployed quant (full sequential
+  regen, below). Stratify rungs
+  by `source` so every scale holds the same mix.
+- **Datashape = stock speculators preprocessing — no bespoke prep
+  (decided 2026-10-18).** Feed `conversations` as-is to `speculators
+  prepare-data --render-endpoint <quant vLLM>`: the library normalizes
+  ShareGPT `from`/`value`, fans out **one row per assistant turn**, each
+  with a boundary loss mask (0 on context, 1 on that turn) and history
+  re-rendered exactly as inference sees it; trailing non-assistant turns
+  drop; a turn whose context alone exceeds the cap is skipped per-turn,
+  not per-conv. Verified 0.8.1 knob defaults: `--seq-length` 8192,
+  `--minimum-valid-tokens` OFF (None), seed 0. No `--loss-mode`, no
+  `reshape_tokens.py`, no custom caps — that machinery (and its churn)
+  is retired for this campaign. This supersedes the collapse-vs-keep
+  prep question: the answer is neither, it's per-turn fan-out.
+- **Regen scope = EVERYTHING (decided 2026-10-18).** Stock fan-out
+  supervises every assistant turn present in a conversation, so
+  all-on-policy requires sequential whole-conversation regen: keep
+  source user turns verbatim, regenerate each assistant turn
+  conditioned on the already-regened history, emit the rebuilt
+  conversation. Fan-out then supervises only target-generated text,
+  with contexts exactly as inference sees them. Frozen-context
+  per-turn regen is NOT viable on the conversations path (earlier
+  source turns would get supervised off-policy) and would force the
+  bespoke `(input_ids, loss_mask)` passthrough — rejected. Single-turn
+  rows (the math half) are unchanged: one turn = one regen. Regen runs
+  in batched waves across conversations (turn-1 for all convs, then
+  turn-2, …) — vLLM batches each wave; multi-turn convs chain wave to
+  wave. Assistant-turn volume ≈ 1.6–1.8M turns (~1.3M single +
+  multi-turn extras; measure exact count from the pinned dataset and
+  budget pod regen in waves). New script pattern required —
+  `regen_pool.sh` finals-mode is v4 lineage only.
+- Reference recipe = paper optimizer (6 ep / 6e-4 cosine / γ7 / b16 /
+  taps_v4), CE loss, quant verifier, stock datashape + knob defaults.
+  Warm-start eligible from ctrl ep2 (`pod_snapshot/ctrl_closeout/`,
+  sha-verified).
+- Gate = reference conformance: beat the MTP floor 2.868, target
+  DSpark-class. Never gate on a predecessor checkpoint.
+- Re-divergence queue (one axis at a time, only after the reference run
+  conforms): KL-vs-CE, bf16-vs-quant verifier, taps 6→9.
+- External numbers, bars, and open reconciliation items live in
+  `docs/external_references.md` — check §7 before quoting any external
+  bar.

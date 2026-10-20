@@ -15,9 +15,12 @@ contexts, every row ends user/tool, **zero responses**. Consequences:
   single-turn rows (51% — ALL math + science, plus 60K chat/IF/agent)
   carry no supervision and are dropped by prep.
 - The champion trained on the node-side MERGED data (contexts + on-policy
-  finals; pod-side, gone with the pod). Its supervised budget was
-  **~150M+** (incl. ~40M on-policy finals), not the 115–120M estimated
-  from the input file.
+  finals). The exact merged artifact is gone with the pod, but the
+  ingredients were recovered 2026-10-16 and are sha-pinned in
+  `data/MANIFEST.sha256` (`regen_4b*.jsonl`, dual-homed in the main
+  checkout): regenerated finals + SFT/OPD splits + 0-error receipt. Its
+  supervised budget was **~150M+** (incl. ~40M on-policy finals), not
+  the 115–120M estimated from the input file.
 - Ladder-side training (incl. rung 1) used context-internal SOURCE turns
   only — off-policy, zero finals ever.
 - Mix: file row labels (chat 65 / math 12.5 / science 8 / …) describe the
@@ -28,10 +31,13 @@ contexts, every row ends user/tool, **zero responses**. Consequences:
 - Lengths: mean 2,115 / median 1,676 / p90 4,588 / p99 6,207 tokens,
   uncapped (paper spec caps at 3072; DSpark reference preps ≤1024).
 
-**τ 1.05 (rung 1) is NOT a clean dead-zone number**: trained off-policy,
-scored BELOW the epoch-0 control (3.407) — distribution-mismatch
-signature (taught source-model text, evaluated against quant text);
-volume was confounded with data-kind. The rung-1 *observations* stand
+**τ 1.05 (rung 1) is NOT a clean dead-zone number**: trained off-policy.
+At t=0.7 it sat flat at ~1.05 across all epochs (n=4) — dead zone. Its
+greedy sweep *improved* over the epoch-0 control (3.407 → 4.157, both
+t=0, n=1 vs n=2, `runs/sweep-sweepfix2`) — greedy gains that don't transfer to
+serving are the distribution-mismatch signature (taught source-model
+text, evaluated against quant text); volume was confounded with
+data-kind. The rung-1 *observations* stand
 (extraction parity 20/20; loss 2.90→2.76; recall@16 0.30; flat
 1.04–1.05 across all 6 epochs) — the conclusion doesn't.
 

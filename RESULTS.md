@@ -154,8 +154,9 @@ serve-down-robust pick. MTP re-anchored on the same ladder: k=1 1.78, k=2 2.32,
 k=3 **2.71** (the published "3.90" was their harness, not ours).
 
 External anchors: champion 9-subset weighted 4.16 vs full MTP 3.26 (wins 8/9
-subsets); premium 27B DFlash2 on our ladder 2.959 @ matched b8 — the 4B
-champion beats it with a GPTQ verifier + serve-down handicaps stacked.
+subsets) — first-pass reads; the confirmed profile below is authoritative
+(4.65 vs 3.21, 9/9). Premium 27B DFlash2 on our ladder 2.959 @ matched b8
+— the 4B champion beats it with a GPTQ verifier + serve-down handicaps stacked.
 
 9B / 27B drafters: init configs built (models.py), never trained — 27B was a
 measured NO-GO (bounded upside vs ~5× pod cost). Untested until run and
@@ -259,7 +260,13 @@ floor-mapping, not selection data). Dataset = banked 0.8B regen finals
 | ~0.7M (320) | dpace-default | 1.024 |
 | ~3.5M (3,000) | static γ7 | 1.081 |
 | ~3.5M (3,000) | dpace α0.5 | 1.090 |
-| — | MTP k=15 control (untrained head) | **2.868** |
+| — | MTP control (untrained head, k=3) | **2.868** |
+
+(Row relabeled 2026-10-18: the run is named "mtp-15" because `eval_mtp.sh
+15 8151` consumed 15 as the run NAME — arg 3 is SPEC, defaulted to 3.
+`results/results.csv` records `spec=mtp-k3`; consistent with the GB10
+anchor table's native-MTP k=3 → 2.86. It is the 4B quant's MTP head,
+used as the shared floor bar for the 0.8B testbed — not 0.8B-native.)
 
 - **Dead zone at 0.8B extends to ≥3.5M supervised** — 5× data moved τ +0.06.
   The 3.5M D-PACE A/B is therefore uninformative for the method (both arms at
@@ -278,6 +285,95 @@ floor-mapping, not selection data). Dataset = banked 0.8B regen finals
 - A 15K-conv A/B (≈17M supervised) was started and then killed: superseded
   by the full-scale 0.8B round on the Blackwell pod (RTX PRO 6000, same
   Blackwell family as GB10).
+
+## Optimized 4B run: D-PACE + Draft-OPD (2026-10-17, B200 pod, on its own merit)
+
+Single optimized arm on the regen-v4 corpus, same pod and ladder as the
+permanent re-anchors (imported 4B ckpt 3.714 @ t=0.7 n=4; MTP floor 2.868
+quoted from its GB10 measurement, not re-measured here). Outcome: the
+optimized arm **dead-zone plateaus**, and a same-corpus static-control
+arm (imported recipe verbatim) fails identically
+— the cause is input/assembly-side, not the loss function. **NO SHIP**;
+pod torn down at ~$167 total ($190 budget).
+
+### D-PACE arm (killed at epoch 1 of 6)
+
+| stage | τ @ t=0.7 (n=4) | range |
+|---|---|---|
+| epoch 0 end | 1.378 | 1.368–1.382 (checkpoint_best n=4) + 1.392/1.376/1.405 (`0` n=3) |
+| epoch 1 end | 1.361 | 1.346–1.388 |
+
+**Flat at the dead zone across two epochs (270M supervised tokens cumulative)**
+— champion hit 3.28 after one epoch at this scale. Training itself was
+healthy (loss 2.31→1.01, selector acc climbing, fetch_frac ~4%) — an
+**objective-mismatch signature**: D-PACE+CE fits its objective without
+transferring to acceptance. Corroborating history: rung 1 (10M) trained
+D-PACE *silently* (pre-upgrade default footgun) and sat at τ 1.05 — part of
+that "volume dead-zone" may have been this same effect.
+
+### Static-control arm (champion recipe verbatim, 3 epochs)
+
+`fixed-exp-decay --dflash-decay-gamma 7`, default loss-fn — identical corpus,
+init, LR (6e-4 cosine, 4% warmup), block/taps. Discriminates D-PACE-vs-corpus.
+
+| stage | τ @ t=0.7 (n=4) | notes |
+|---|---|---|
+| epoch 0 end | 1.245 | 1.231–1.256 — ALSO dead zone, below dpace ep0 (1.378) |
+| epoch 1 end | 1.234 | 1.214–1.246 — flat |
+| epoch 2 end (final) | 1.188 | 1.177–1.200 — monotone decline |
+
+Every stage sits >1.6 τ below the **untrained MTP floor** (2.868) — deeper
+in the dead zone than the D-PACE arm at every epoch, and declining as
+training proceeds. Draft-OPD: not run — the OPD premise is a trained
+drafter; neither arm produced one. Bench-924 (t=0, n=2): cancelled by
+operator after 4/9 subsets — profiling a dead drafter had no decision
+value. Partials: qa 1.233, tool_call 1.189, HumanEval ~16
+accepted-tokens/prompt (an order of magnitude below healthy drafters; run 1
+tripped the plausible-floor gate that was calibrated for τ≥3 drafters —
+`FLOOR_PER_PROMPT` env added to `drafter/bench_subsets.sh`, default 25).
+
+### Verdict — no ship; failure isolated to assembly-side deviations from the published idiom
+
+**No checkpoint ships** (all τ ≤ 1.38 vs MTP floor 2.868, DSpark 3.41).
+The imported recipe is not reproducible from any documented state — its
+original assembly died with its pod. Root cause is bounded, not named:
+
+- **Structural suspects exonerated by measurement** — masks, taps,
+  alignment, dtype, stack, flex/attn config, mix all verified identical
+  between the runs that diverged. The imported ckpt reads this corpus's
+  regenerated finals at 1.49 nats vs 1.43 on its own — the data
+  distribution is not the gap. Supervised-volume parity holds (~135M vs
+  134.8M).
+- **Training dynamics: glacial underfit at parity** — ctrl loss 2.80→2.69
+  over 0.24 epoch, train≈val throughout, τ declining as loss falls. The
+  imported ckpt read 3.28 after one epoch on its original corpus (6-ep
+  cosine schedule).
+- **What remains = deviations from the published DFlash2/DSpark idiom**,
+  each measured: multi-turn corpus regrouped by conversation with ALL
+  assistant turns supervised (papers: one conv per sample, first-turn, prep
+  ≤1024 or 3072); regen capped at 640 tokens; serve sampling (top_k 20)
+  stamped into the generator; no minimum-valid-tokens filter; 3-epoch
+  budget vs 6.
+
+**Next campaign = the idiom itself** — ~100K prompts, one conv/sample,
+stated cap, no top_k in regen, min-valid-tokens filter, ecosystem-default
+mix, 6 epochs; warm-start eligible from the ctrl ep2 checkpoint (weights
+pulled and sha-verified in `pod_snapshot/ctrl_closeout/`). The gate is
+reference conformance (MTP floor, DSpark/DFlash classes) — never a
+predecessor checkpoint. Salvage: instruments proven end-to-end on B200 at
+full scale (regen → extract → train → ladder → bench, all runlib'd), the
+permanent re-anchor 3.714 (n=4), frozen-data lineage, and the full τ
+ledger + campaign logs (`PULL_MANIFEST.sha256`, 187/187 verified).
+
+### Pipeline facts (measured)
+
+Corpus (`drafter/data_audit.py`): 130,460 rows, **134.8M supervised /
+197.5M total tokens**; finals regenerated on-policy by the deployed
+nchapman/Qwen3.5-4B-W4A16-GPTQ at serving params (t 0.7 / top_p 0.95 /
+top_k 20); SFT split 97% / OPD holdout 3%. B200: ~111 min/epoch at 197.5M
+total tokens (29.7K tok/s), trainer 48GB + concurrent eval vLLM (0.6
+util) coexist in 183GB. Speculators checkpoint cadence per epoch boundary:
+`<N>/`, `checkpoint_best/`, `epoch<N>_end/` — three names, same weights.
 
 ## 35B dual-quant mission (2026-10-17/18, RunPod B200 se3u5xacjmhp7j)
 

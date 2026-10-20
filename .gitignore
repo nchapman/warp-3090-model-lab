@@ -48,3 +48,12 @@ data/context_pool.jsonl
 
 # local secrets, never commit
 .env
+# pulled campaign evidence: heavy artifacts stay on disk only (shas in PULL_MANIFEST.sha256)
+pod_snapshot/**/model.safetensors
+pod_snapshot/**/optimizer_state_dict.pt
+pod_snapshot/**/0.tar.zst
+pod_snapshot/**/1.tar.zst
+pod_snapshot/**/2.tar.zst
+pod_snapshot/chain_sft.log
+pod_snapshot/ctrl_closeout/root/chain_sft.log
+pod_snapshot/ctrl_closeout/root/chain_ctrl.log
