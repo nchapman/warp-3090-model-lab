@@ -236,6 +236,12 @@ NOT SGLang/Marlin-safe. All post-10-18 builds keep a/b BF16 (compat
 requirement, see quantize.py ignore history). Champion-calib rebuilds
 under today's code are tagged `v1rebuild`.
 Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
+**Release metadata (2026-10-20, user decision):** every quant ships the
+CUSTOM release chat template (froggeric v22.5, byte-pinned as
+quant/release_chat_template.jinja, sha-guarded in quantize.py, standalone-file
+mechanism identical to the published champion) + the SERVING_PARAMS
+generation_config stamp. Stock template does NOT ship. Measured 0.5pt-neutral
+on ifeval (n=541) — consistency with the published family wins.
 **Calib truth: cascade-v1 = 999 rows (truncated 4096 tok), 100%
 nvidia/Nemotron-Cascade-2-SFT-Data, stratified to the dataset's own card
 proportions — safety dropped (0.02%), chat 58.7 / math 18.5 / science 11.4 /

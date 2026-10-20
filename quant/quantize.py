@@ -519,7 +519,24 @@ def main():
     import json as _json
     with open(f"{save_dir}/generation_config.json", "w") as f:
         json.dump(gc, f, indent=2)
-    print(f"saved to {save_dir} (serving params stamped: {_m.SERVING_PARAMS})")
+    # stamp the release chat template (froggeric v22.5, byte-pinned) as a
+    # standalone file — the exact mechanism the published champion uses
+    # (tokenizer_config carries no embedded template; transformers/vLLM
+    # resolve the standalone file). sha-guarded so a stray edit can't ship.
+    import hashlib as _hl
+    _tpl = Path(__file__).parent / "release_chat_template.jinja"
+    _TPL_SHA = "e57684bae4156211a55473c5a63be976a405a37ab5be5ae0e5abf1df5349c4b2"
+    if not _tpl.is_file():
+        raise FileNotFoundError(f"release template missing: {_tpl}")
+    _got = _hl.sha256(_tpl.read_bytes()).hexdigest()
+    if _got != _TPL_SHA:
+        raise ValueError(
+            f"release_chat_template.jinja sha256 {_got} != pinned {_TPL_SHA}; "
+            "intentional template changes must update the pin")
+    import shutil as _sh
+    _sh.copyfile(_tpl, f"{save_dir}/chat_template.jinja")
+    print(f"saved to {save_dir} (serving params stamped: {_m.SERVING_PARAMS}; "
+          f"release chat template stamped, sha {_TPL_SHA[:12]})")
 
     if is_moe:
         # MTP audit: transformers drops mtp.* on load; llmcompressor's
