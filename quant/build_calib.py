@@ -252,7 +252,14 @@ def stratified(pool, n, rng):
 
 
 def build_calib(args, rng, banned):
-    weights = {k: v / TOT for k, v in CARD_TOTALS.items()}
+    if args.targets_json:
+        # tuning entry point: explicit subset weights (normalized here) —
+        # how recipe-delta variants (e.g. calib-cascade-if3x) are built
+        t = json.loads(args.targets_json)
+        tot = sum(t.values())
+        weights = {k: v / tot for k, v in t.items()}
+    else:
+        weights = {k: v / TOT for k, v in CARD_TOTALS.items()}
     rows = []
     print(f"{'subset':24s} {'share':>6s} {'rows':>5s} pool")
     for subset, share in weights.items():

@@ -29,6 +29,7 @@ Usage:
       [--calib data/calib-cascade-v1.jsonl] \
       [--out data/calib-cascade-qwenfinals.jsonl] \
       [--limit 3]   # smoke first, always
+      [--api-base http://localhost:8137/v1 --model Qwen/Qwen3.5-4B]  # self-authored
 """
 import argparse
 import concurrent.futures as cf
@@ -44,7 +45,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lablog import log_event, run_done, run_fail  # noqa: E402
 
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_API_BASE = "https://openrouter.ai/api/v1"
 # fallback price table (USD/1M tok) if usage.cost is absent — qwen3.8-flash
 PRICE_IN, PRICE_OUT = 0.15, 0.47
 
@@ -69,7 +70,9 @@ def api_messages(context, no_think):
     return msgs
 
 
-def call_openrouter(key, model, msgs, seed, params, max_tokens, retries):
+def call_openrouter(key, model, msgs, seed, params, max_tokens, retries,
+                    api_base=DEFAULT_API_BASE, local=False):
+    url = api_base.rstrip("/") + "/chat/completions"
     body = {
         "model": model,
         "messages": msgs,
@@ -85,7 +88,7 @@ def call_openrouter(key, model, msgs, seed, params, max_tokens, retries):
     last_err = None
     for attempt in range(retries):
         req = urllib.request.Request(
-            API_URL, data=data, method="POST",
+            url, data=data, method="POST",
             headers={"Authorization": f"Bearer {key}",
                      "Content-Type": "application/json"})
         try:
@@ -104,10 +107,13 @@ def call_openrouter(key, model, msgs, seed, params, max_tokens, retries):
             if not text.strip():
                 raise ValueError("empty completion content")
             usage = out.get("usage", {})
-            cost = usage.get("cost")
-            if cost is None:
-                cost = (usage.get("prompt_tokens", 0) / 1e6 * PRICE_IN
-                        + usage.get("completion_tokens", 0) / 1e6 * PRICE_OUT)
+            if local:
+                cost = 0.0  # self-served vLLM: no meter
+            else:
+                cost = usage.get("cost")
+                if cost is None:
+                    cost = (usage.get("prompt_tokens", 0) / 1e6 * PRICE_IN
+                            + usage.get("completion_tokens", 0) / 1e6 * PRICE_OUT)
             return text, cost, usage, finish == "length"
         except (urllib.error.URLError, urllib.error.HTTPError, ValueError,
                 KeyError, IndexError, TimeoutError, json.JSONDecodeError) as e:
@@ -133,13 +139,15 @@ def process_row(idx_row, args, params, key):
         text, cost, usage, trunc = call_openrouter(
             key, args.model, api_messages(context, args.no_think),
             seed=args.seed + idx, params=params,
-            max_tokens=args.max_tokens, retries=args.retries)
+            max_tokens=args.max_tokens, retries=args.retries,
+            api_base=args.api_base, local=args.local)
     except RuntimeError as e:
         return idx, None, str(e)
     new_row = dict(row)
     new_row["conversations"] = context + [
         {"role": "assistant", "content": text}]
-    new_row["generator"] = f"{args.model}@openrouter"
+    new_row["generator"] = (f"{args.model}@"
+                            f"{'local-vllm' if args.local else 'openrouter'}")
     with _lock:
         _state["cost"] += cost
         _state["tokens_in"] += usage.get("prompt_tokens", 0)
@@ -155,6 +163,9 @@ def main():
     p.add_argument("--calib", default="data/calib-cascade-v1.jsonl")
     p.add_argument("--out", default="data/calib-cascade-qwenfinals.jsonl")
     p.add_argument("--model", default="qwen/qwen3.8-flash")
+    p.add_argument("--api-base", default=DEFAULT_API_BASE,
+                   help="OpenAI-compatible base URL; point at a local vLLM "
+                        "(http://localhost:PORT/v1) for self-authored arms")
     p.add_argument("--concurrency", type=int, default=12)
     p.add_argument("--retries", type=int, default=4)
     p.add_argument("--max-tokens", type=int, default=16384)
@@ -164,12 +175,16 @@ def main():
     p.add_argument("--no-think", action="store_true")
     args = p.parse_args()
 
+    args.local = args.api_base.startswith(("http://127.", "http://localhost"))
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
-        print("OPENROUTER_API_KEY not set — add it to ~/.config/secrets.env "
-              "and open a fresh shell (see AGENTS.md secrets section)",
-              file=sys.stderr)
-        sys.exit(2)
+        if args.local:
+            key = "local"  # self-served vLLM: auth unused
+        else:
+            print("OPENROUTER_API_KEY not set — add it to ~/.config/secrets.env "
+                  "and open a fresh shell (see AGENTS.md secrets section)",
+                  file=sys.stderr)
+            sys.exit(2)
 
     rows = [json.loads(l) for l in open(args.calib)]
     if args.limit:
@@ -195,6 +210,7 @@ def main():
     params = {"temperature": 0.7, "top_p": 0.95, "top_k": 20,
               "thinking": not args.no_think}
     log_event("RUN_START", calib=args.calib, out=args.out, model=args.model,
+              api_base=args.api_base, local=args.local,
               todo=len(todo), skipped=len(rows) - len(todo),
               sampling=json.dumps(params), seed=args.seed,
               thinking=params["thinking"])
@@ -224,7 +240,9 @@ def main():
 
     # sidecar provenance — lives next to the data file
     sidecar = {
-        "teacher": f"{args.model}@openrouter",
+        "teacher": (f"{args.model}@"
+                    f"{'local-vllm' if args.local else 'openrouter'}"),
+        "api_base": args.api_base,
         "sampling": params, "seed_base": args.seed,
         "max_tokens": args.max_tokens,
         "source_calib": args.calib, "source_sha256": src_hash,
