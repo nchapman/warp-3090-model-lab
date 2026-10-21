@@ -1,4 +1,4 @@
-# warp-3090-quant-lab — agent rules
+# warp-3090-model-lab — agent rules
 
 Project-specific doctrine for any agent (or human) working in this repo. The
 global engineering guidelines still apply; this file adds what this lab

@@ -1,4 +1,4 @@
-# warp-3090-quant-lab
+# warp-3090-model-lab
 
 Quants and DFlash2 speculative drafters for the **warp-3090** inference engine
 (custom engine for 3090/Ampere). Part of the warp-3090 project — the 24GB
