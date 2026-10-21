@@ -34,19 +34,30 @@ run_init() {
 }
 
 # log_event <TYPE> [key=value]... — JSON to events.jsonl, human line to stderr.
+# Accepts both "k1=v1" "k2=v2" and the legacy packed form "k1=v1 k2=v2" —
+# a packed arg is split only when EVERY whitespace token looks like key=value,
+# so free-text values (reason=..., args=...) stay one field.
 log_event() {
   local type=$1; shift
   python3 - "$RUN_EVENTS" "$type" "$@" <<'PY' >&2
-import json, os, sys, time
+import json, os, re, sys, time
 path, etype, kv = sys.argv[1], sys.argv[2], sys.argv[3:]
-obj = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
-       + f".{int(time.time()*1000)%1000:03d}Z", "type": etype}
+t = time.time()  # one clock read: gmtime() and the ms field must agree
+obj = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t))
+       + f".{int(t*1000)%1000:03d}Z", "type": etype}
+parts = []
 for item in kv:
+    toks = item.split()
+    if len(toks) > 1 and all(re.match(r"[A-Za-z_][A-Za-z0-9_]*=", s) for s in toks):
+        parts.extend(toks)
+    else:
+        parts.append(item)
+for item in parts:
     k, _, v = item.partition("=")
     obj[k] = v
 with open(path, "a") as f:
     f.write(json.dumps(obj) + "\n")
-print(f"[{obj['ts']}] [{os.environ.get('RUN_NAME', 'run')}] {etype} {' '.join(kv)}", file=sys.stderr)
+print(f"[{obj['ts']}] [{os.environ.get('RUN_NAME', 'run')}] {etype} {' '.join(parts)}", file=sys.stderr)
 PY
 }
 
