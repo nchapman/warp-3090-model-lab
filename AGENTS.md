@@ -13,11 +13,16 @@ shipped, and misinformed a planning session.
 ## Repo layout (per-activity monorepo, 2026-10-20)
 
 - `quants/` — quant workflow (calib build, quantize, verify, probe,
-  publish, capability battery, model cards). Local quant artifacts are
+  publish, capability battery, model cards; `requirements-quant.txt`).
+  Local quant artifacts are
   untracked bare root dirs named for what they are (`*-W4A16-GPTQ*`,
   gitignored) — there is no tracked `quants/` artifact directory.
 - `drafters/` — drafter workflow: slicing, on-policy regen, prep,
-  extraction, ladders/evals, `train.md` recipes, draft_config taps.
+  extraction, ladders/evals, `train.md` recipes, draft_config taps;
+  self-contained with `requirements-drafter.txt`, `patches/`
+  (speculators fp8 load-cast, draft-OPD), `data_scaling.md`,
+  `external_references.md` (speculator literature — check its §7
+  before quoting any external claim).
 - `finetune/` — managed/external fine-tuning workflows (scaffold; charter
   in its README).
 - `lib/` — shared run plumbing: `runlib.sh` (bash), `lablog.py` (python).
@@ -32,9 +37,12 @@ shipped, and misinformed a planning session.
   `states/` `ds_*/` `draft_*/` `eval_*/` `data-raw/` `smoke/` and root
   `*-W4A16-GPTQ*` dirs. `results/results.csv` is live eval output;
   anything worth keeping graduates to `experiments/*/records/`.
-- Venv and requirements names keep their historical identities
+- Venv and requirements file names keep their historical identities
   (`.venv-quant`, `.venv-dflash`, `requirements-drafter.txt`) — renaming
-  forces rebuild churn on every pod for zero information.
+  forces rebuild churn on every pod for zero information. The files live
+  inside their subprojects (`quants/requirements-quant.txt`,
+  `drafters/requirements-drafter.txt`); the venvs themselves stay at the
+  repo root.
 
 ## Runs and processes
 
@@ -142,7 +150,7 @@ corpus is built fresh per the campaign spec below.
   **uncapped**; DFlash paper spec caps at 3072, DSpark reference ≤1024.
 - Shape tooling: `drafters/reshape_tokens.py` (prefix/merged/first/short),
   `prep_dataset.py --loss-mode all|last --max-tokens N` (drop cap).
-- Full corpus narrative: `docs/data_scaling.md`.
+- Full corpus narrative: `drafters/data_scaling.md`.
 
 **Eval instruments** (two exist; long-context: none yet — don't claim
 deployment relevance on long inputs without building one):
@@ -223,7 +231,7 @@ see the audit). Probe-first tiering stands; probe-negative ≠ ship-safe
 (a shipping call needs the format-robust subset: ifeval + code).
 
 **τ bars and the dead-zone map** (τ @ t=0.7 n≥4, ladder-20, unless noted;
-external references — full provenance in `docs/external_references.md`):
+external references — full provenance in `drafters/external_references.md`):
 - **THE BAR: untrained MTP head = 2.868** (4B quant's native MTP,
   **k=3**, ladder-20 @ t=0.7, single run, GB10 — `results/results.csv`
   `spec=mtp-k3`; consistent with the GB10 anchor table's k=3 → 2.86).
@@ -235,7 +243,7 @@ external references — full provenance in `docs/external_references.md`):
   nothing at ≤1.4 ships.
 - **Reference recipes:** DSpark-class ≥3.41 (citation under reconciliation —
   paper trains 1.3M prompts/10 epochs, chat τ 3.29–3.64; resolve before
-  quoting externally, `docs/external_references.md` §7); DFlash paper
+  quoting externally, `drafters/external_references.md` §7); DFlash paper
   100K-sample ablations → 4.9–5.6 greedy.
 - Dead zone: <~5M supervised (two sources); known-good 20–60M; rising to
   ~1B (DFlare). 0.8B: 0.7M → 1.024, 3.5M → 1.08–1.09 (n=1) — dead zone
@@ -420,5 +428,5 @@ filter (speculators) — we lack it.
 - Re-divergence queue (one axis at a time, only after the reference run
   conforms): KL-vs-CE, bf16-vs-quant verifier, taps 6→9.
 - External numbers, bars, and open reconciliation items live in
-  `docs/external_references.md` — check §7 before quoting any external
+  `drafters/external_references.md` — check §7 before quoting any external
   bar.

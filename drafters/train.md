@@ -1,6 +1,6 @@
 # Training the DFlash2 drafter (`speculators train`)
 
-All commands run in the **drafter venv** (`requirements-drafter.txt`).
+All commands run in the **drafter venv** (`requirements-drafter.txt` in this dir).
 Verifier is always the **deployed quant** (quant-aligned doctrine).
 
 ## Hardware
@@ -82,7 +82,7 @@ Re-anchored numbers on our ladder: MTP k=1 1.78 / k=2 2.32 / k=3 2.71
 
 ## Known-good / known-bad (details in experiments/drafters/)
 
-- GOOD: fp8 states (needs `patches/speculators_fp8_load_cast.patch`); epoch-2
+- GOOD: fp8 states (needs `patches/speculators_fp8_load_cast.patch` in this dir); epoch-2
   early stop; per-epoch ladder evals; conv-disjoint val splits.
 - DEAD ENDS (do not retry): blend tilts (v5 arm D: null — math itself declined),
   selector-loss push α=4 (v5 arm E: −0.3 to −0.4, recall@16 collapses), block-16
@@ -114,6 +114,6 @@ the question is open at real scale.
 
 On-policy distillation from verification boundaries (arXiv:2605.29343) —
 collection → replay dataset → post-train, all scripts under `drafters/opd_*`,
-trainer patch `patches/speculators_draft_opd.patch` (inert without opd_
+trainer patch `patches/speculators_draft_opd.patch` in this dir (inert without opd_
 columns in the data — the default SFT path is untouched). Full recipe and
 verified semantics: `experiments/drafters/draft_opd.md`.

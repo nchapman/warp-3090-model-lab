@@ -29,7 +29,7 @@ push)
       --exclude=data-raw --exclude='Qwen*' --exclude=eval_* --exclude=ds_* \
       -cf - $(git ls-files) slices draft_init 2>/dev/null \
     | $SSH "mkdir -p $REMOTE_DIR && tar -C $REMOTE_DIR -xf -"
-  echo "[pod] pushed. venv on pod: python3 -m venv venv && venv/bin/pip install -r requirements-drafter.txt"
+  echo "[pod] pushed. venv on pod: python3 -m venv venv && venv/bin/pip install -r drafters/requirements-drafter.txt"
   ;;
 run)
   shift; $SSH "cd $REMOTE_DIR && setsid nohup $* > /root/pod_task.log 2>&1 & echo started"

@@ -16,7 +16,7 @@
 #             dry-run size guard (the 281GB smoke/ lesson: refuse > MAX_SYNC_GB
 #             of transfer without FORCE=1, and name the offenders)
 #   verify  : sha256sum -c data/MANIFEST.sha256 — frozen data is load-bearing
-#   venv    : .venv-dflash from requirements-drafter.txt (skipped if importable)
+#   venv    : .venv-dflash from drafters/requirements-drafter.txt (skipped if importable)
 #   patches : speculators fp8_load_cast + draft_opd, idempotent
 #   check   : torch device capability + matmul on the pod GPU
 #   models  : hf download $MODELS (default: the 4B campaign set)
@@ -119,7 +119,7 @@ SSH "cd $REPO_DIR && { .venv-dflash/bin/python -c 'import torch, speculators, vl
         2>/dev/null && echo 'venv already importable — skipping pip'; } \
      || { python3 -m venv .venv-dflash \
           && .venv-dflash/bin/pip install -q -U pip \
-          && .venv-dflash/bin/pip install -q -r requirements-drafter.txt \
+          && .venv-dflash/bin/pip install -q -r drafters/requirements-drafter.txt \
           && echo 'venv built'; }"
 # quant venv (torch 2.14 / llmcompressor) — separate interpreter, needed by
 # run_quant.sh; skipped when already importable. Not part of the drafter
@@ -129,13 +129,13 @@ SSH "cd $REPO_DIR && { .venv-quant/bin/python -c 'import torch, llmcompressor, t
         && echo 'quant venv already importable — skipping pip'; } \
      || { python3 -m venv .venv-quant \
           && .venv-quant/bin/pip install -q -U pip \
-          && .venv-quant/bin/pip install -q -r requirements-quant.txt \
+          && .venv-quant/bin/pip install -q -r quants/requirements-quant.txt \
           && echo 'quant venv built'; }"
 
 stage "patches"
 # ORDER MATTERS: draft_opd's train/data.py hunk is cut against the
 # fp8-patched file — apply fp8_load_cast first, draft_opd second.
-PATCHES="patches/speculators_fp8_load_cast.patch patches/speculators_draft_opd.patch"
+PATCHES="drafters/patches/speculators_fp8_load_cast.patch drafters/patches/speculators_draft_opd.patch"
 SSH "cd $REPO_DIR && SP=\$(.venv-dflash/bin/python -c \
       'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
      && .venv-dflash/bin/pip install -q --force-reinstall --no-deps speculators==0.8.1 \

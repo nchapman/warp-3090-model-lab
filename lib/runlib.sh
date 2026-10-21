@@ -4,7 +4,7 @@
 # Source from any lab script:
 #   source "$(dirname "$0")/../lib/runlib.sh"
 #
-# Contract (README "Run logging standard" is the user-facing doc):
+# Contract (lib/README.md is the user-facing doc):
 #   - every run gets runs/<name>.<UTC ts>/ with cmd.txt + events.jsonl
 #   - events are structured (one JSON object per line), also echoed to stderr
 #   - inputs are validated by name BEFORE anything launches (require_file)

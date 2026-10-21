@@ -3,7 +3,7 @@
 Creates <out>: 5 plain qwen3 draft layers at the target's dims, speculators
 config embedded, bf16-stripped checkpoint (verifier-owned weights omitted —
 byte-convention identical to the production drafters). Requires the
-speculators package (requirements-drafter.txt) — run in the drafter venv.
+speculators package (drafters/requirements-drafter.txt) — run in the drafter venv.
 
 Usage:
   python drafters/bootstrap_draft.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ-cascade \

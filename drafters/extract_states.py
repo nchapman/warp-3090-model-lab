@@ -47,7 +47,7 @@ def parse_args():
                    help="explicit tap list (aux + final, N+1 entries)")
     p.add_argument("--dtype", choices=["fp8", "bf16"], default="fp8",
                    help="state storage; fp8 is 0.5x disk, parity-proven "
-                        "(cos >= 0.9997; needs patches/speculators_fp8_load_cast.patch)")
+                        "(cos >= 0.9997; needs drafters/patches/speculators_fp8_load_cast.patch)")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--max-batch-tokens", type=int, default=16384)
     p.add_argument("--max-batch-rows", type=int, default=16,

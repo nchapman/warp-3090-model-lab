@@ -34,7 +34,7 @@ Apply the trainer patch first (inert by default):
 
 ```bash
 SP=$(./.venv-dflash/bin/python -c 'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
-  && patch -p1 -d "$SP" < patches/speculators_draft_opd.patch
+  && patch -p1 -d "$SP" < drafters/patches/speculators_draft_opd.patch
 ```
 
 ## Verified semantics (vLLM 0.31.0, dflash path)
@@ -68,7 +68,7 @@ and eval agree independently.
 
 ## Trainer patch behavior
 
-`patches/speculators_draft_opd.patch` (three files, applied to the venv):
+`drafters/patches/speculators_draft_opd.patch` (three files, applied to the venv):
 
 - `train/data.py`: attaches `opd_*` columns from the ds to samples.
 - `models/dflash2/core.py`: gathers opd tensors to the **anchor grid**

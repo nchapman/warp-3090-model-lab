@@ -3,7 +3,7 @@
 # Catches the whole bug class (tap shapes, template drift, save gate, fp8 cast)
 # in <15 min on one GPU. Env: BASE (regen source), QUANT (verifier for
 # extract/train), OUT (workspace, wiped), PORT, VENV (drafter venv bin).
-# Standard logging via lib/runlib.sh (README "Run logging standard").
+# Standard logging via lib/runlib.sh (lib/README.md).
 set -eu
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 source "$ROOT/lib/runlib.sh"

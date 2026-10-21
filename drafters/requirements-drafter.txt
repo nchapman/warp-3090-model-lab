@@ -1,8 +1,8 @@
 # Drafter stack — validated combo (kit/requirements-pod.txt, v3-v5 runs:
-# GB10 Spark sm_121 + B200 sm_10x). Apply patches/speculators_fp8_load_cast.patch
+# GB10 Spark sm_121 + B200 sm_10x). Apply drafters/patches/speculators_fp8_load_cast.patch
 # to speculators if you store states as fp8 (the default in extract_states.py).
 #
-# attn impl per machine (see drafter/train.md): B200 -> simple_flex_attention,
+# attn impl per machine (see drafters/train.md): B200 -> simple_flex_attention,
 # Spark sm_121 -> sdpa (flex Triton kernels exceed its shared memory).
 speculators==0.8.1
 vllm==0.31.0
@@ -11,7 +11,7 @@ transformers==5.16.1
 datasets==5.0.1
 safetensors==0.8.0
 
-# Capability battery (quant/capability_battery.sh) — lm-eval + task deps.
+# Capability battery (quants/capability_battery.sh) — lm-eval + task deps.
 # 0.4.13 is the patch target (THINK_STRIP in models/utils.py); extras are NOT
 # covered by lm_eval's own extras: ifeval needs langdetect+immutabledict,
 # minerva needs math-verify+latex2sympy2_extended, and lm-eval hard-asserts

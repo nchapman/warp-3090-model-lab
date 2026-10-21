@@ -52,8 +52,14 @@ def main():
         manifest.append(fields[1].strip())
     # tolerate both ./prefixed and bare manifest path forms
     manifest = [m[2:] if m.startswith("./") else m for m in manifest]
-    on_disk = sorted(q.relative_to(DATA).as_posix() for q in DATA.rglob("*")
-                     if q.is_file() and q.name != "MANIFEST.sha256")
+    # skip the manifest itself and the repo doc data/README.md — on the Hub
+    # repo the README.md path is the DATASET CARD (hf/frozen-data/README.md,
+    # uploaded separately below), so the repo doc must neither be pinned nor
+    # uploaded under that name. Scoped to the top level: a nested README.md
+    # anywhere under data/ still fails the exact-set check.
+    on_disk = sorted(rel for rel in (q.relative_to(DATA).as_posix()
+                                     for q in DATA.rglob("*") if q.is_file())
+                     if rel not in ("MANIFEST.sha256", "README.md"))
     if on_disk != sorted(manifest):
         extra = set(on_disk) - set(manifest)
         missing = set(manifest) - set(on_disk)

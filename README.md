@@ -6,279 +6,93 @@ Quants and DFlash2 speculative drafters for the **warp-3090** inference engine
 kernels), ~15GB weights leaving ~8GB for KV, and drafters trained against the
 **deployed quant** for exact-pairing acceptance.
 
-What this repo reproduces (see `RESULTS.md` for all numbers):
+What this repo reproduces (numbers: `RESULTS.md`):
 
-- **Quants**: W4A16 GPTQ for the Qwen 3.5 release family (3.5-native, 3.6
-  upgrades, 3.8-only — all one architecture class) with the cascade-v1
-  calibration set (999 Nemotron-Cascade-2 conversations): weightedKL
-  0.1087 (4B) / 0.0889 (9B) / 0.1264 (27B).
+- **Quants**: W4A16 GPTQ for the Qwen 3.5 release family with the
+    cascade-v1 calibration set — weightedKL 0.1087 (4B) / 0.0889 (9B) /
+    0.1264 (27B).
 - **Drafters**: quant-aligned DFlash2 block-diffusion speculative drafters —
-  the 4B drafter hits τ 3.79 at the serving point (interval-weighted
-  acceptance, block 16, temp 0.7) / 4.05 greedy, vs full native MTP 2.86 /
-  2.99 on the same ladder.
+    the 4B drafter hits τ 3.79 at the serving point (temp 0.7) vs full
+    native MTP 2.86 on the same ladder.
 
-Plain scripts, no package. Two venvs (the speculators stack pins different
-torch/transformers than the quant stack):
+Plain scripts, no package. Each subproject is self-contained (code, venv
+requirements, patches, docs); a small shared core (registry, run plumbing,
+frozen data, pod ops) lives at the top level. Lab doctrine — measurement
+protocol, process rules, corpus truth, per-machine footguns — is
+`AGENTS.md`, the operating manual for agents and humans alike.
+
+## Subprojects
+
+| dir | what |
+|---|---|
+| **[quants/](quants/)** | W4A16 GPTQ workflow: calib build → quantize → verify/probe → capability battery → publish. Intro, venv, and the reproduce-a-quant sequence in its README. |
+| **[drafters/](drafters/)** | DFlash2 drafter pipeline: slice → on-policy regen (against the deployed quant) → prep → state extraction → train → select → measure τ. `train.md` is the training manual; `data_scaling.md` and `external_references.md` are its deep docs. |
+| **[finetune/](finetune/)** | Managed/external fine-tuning of stock models (scaffold; charter + platform survey `compute-platforms.md` in-dir). Never the local speculators stack. |
+| **[experiments/](experiments/)** | Closed campaigns — code + docs + records frozen together. Historical receipts, read not run. |
+
+## Shared core
+
+| path | role |
+|---|---|
+| `models.py` | family registry (dims, taps, hub ids, SERVING_PARAMS) — single source of truth for `--model` keys |
+| **[lib/](lib/)** | run plumbing every script must use: `runlib.sh` (bash) + `lablog.py` (python) — run lifecycle, watchdogs, events |
+| **[data/](data/)** | frozen rulers (calib/probe/guard/traj/ladder-20) + pinned regen pool; the reproducible half of every number |
+| **[scripts/](scripts/)** | pod & repo ops: `pod_prep.sh`, `podsh.py`, `pod_pull_pass.sh`, `tail_run.sh`, `upload_frozen_data.py` |
+| `RESULTS.md` | every measured number, per model |
+| `AGENTS.md` | lab doctrine (τ measurement, process rules, machine footguns, corpus truth) |
+| `regression.sh` · `pod.sh` | end-to-end pre-flight (<15 min, one GPU) · push/run/pull for rented pods |
+| `hf/` · `issues/` | Hub mirror cards · open engineering issues |
+
+## Quickstart
 
 ```bash
-python3 -m venv .venv-quant   && .venv-quant/bin/pip  install -r requirements-quant.txt
-python3 -m venv .venv-dflash  && .venv-dflash/bin/pip install -r requirements-drafter.txt
-# + fp8 states (default): after the drafter venv installs, patch speculators in it:
-#   SP=$(./.venv-dflash/bin/python -c 'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
-#     && patch -p1 -d "$SP" < patches/speculators_fp8_load_cast.patch
-# + Draft-OPD post-training (optional, inert without opd_ columns; see experiments/drafters/draft_opd.md):
-#     patch -p1 -d "$SP" < patches/speculators_draft_opd.patch
+python3 -m venv .venv-quant   && .venv-quant/bin/pip  install -r quants/requirements-quant.txt
+python3 -m venv .venv-dflash  && .venv-dflash/bin/pip install -r drafters/requirements-drafter.txt
+# drafter venv needs the fp8 patch (see drafters/README.md#venv), then:
+bash regression.sh                       # end-to-end pre-flight, Spark <15 min
+(cd data && sha256sum -c MANIFEST.sha256 --quiet && echo "data OK — complete copy")   # gate: fails if any pinned file is absent/corrupt; fresh clone: see data/README.md
 ```
 
 ## Hardware: train on Blackwell, deploy on Ampere
 
 | machine | role |
 |---|---|
-| **DGX Spark (GB10)** | local dev — everything verified here first (`bash regression.sh`, <15 min, one GPU) |
+| **DGX Spark (GB10)** | local dev — everything verified here first |
 | **RunPod B200/B300** | big rungs — same scripts, faster (`bash pod.sh push && pod.sh run`) |
 | **3090 / Ampere** | deployment target — the quant format is the contract; acceptance is portable, throughput is not |
 
-Why this split is safe (see `experiments/drafters/` notebooks + `RESULTS.md`): acceptance is a
-distribution property, not a kernel property; W4A16 GPTQ weights are
-deterministic given calibration data and serve identically on sm_86. Never
-quote throughput for warp-3090 claims from Blackwell hardware — measure that
-on a 3090. (Don't lean on cross-machine τ comparisons either — single-draw
-τ noise swamps hardware deltas; the anchor numbers in `RESULTS.md` are all
-GB10.) Attention impl per machine: `simple_flex_attention` on B200,
-`sdpa` on Spark (flex Triton kernels exceed sm_121 shared memory) — see
-`drafters/train.md`.
-
-Workflow: **test locally, then push to a big box.**
-`bash regression.sh` locally → `bash pod.sh push` → `bash pod.sh run '...'` →
-`bash pod.sh pull results/ ...` → verify (`(cd data && sha256sum -c
-MANIFEST.sha256 --quiet)` locally; hash pulled artifacts yourself) → teardown.
+Acceptance is a distribution property, not a kernel property; W4A16 GPTQ
+weights are deterministic given calibration data and serve identically on
+sm_86. Never quote throughput for warp-3090 claims from Blackwell hardware,
+and don't lean on cross-machine τ comparisons (single-draw noise swamps
+hardware deltas; `RESULTS.md` anchors are GB10). Attention impl per machine:
+`simple_flex_attention` on B200, `sdpa` on Spark — `drafters/train.md`.
 
 ## Model matrix
 
-`models.py` is the single source of truth — `--model 4b|9b|27b` everywhere:
+| key | model | gen | taps (aux+final) | quant | drafter |
+|---|---|---|---|---|---|
+| `4b` | Qwen/Qwen3.5-4B | 3.5 | [2,10,17,24,29]+32 | ✅ 0.1087 | ✅ τ 3.79 |
+| `0.8b` | Qwen/Qwen3.5-0.8B | 3.5 | [2,8,12,16,20]+24 | ✅ local | ⬜ pilot |
+| `9b` | Qwen/Qwen3.5-9B | 3.5 | same depth | ✅ 0.0889 | ⬜ untested |
+| `27b` | Qwen/Qwen3.8-27B | 3.8 | [2,17,32,47,61]+64 | ✅ 0.1264 | ⬜ NO-GO |
 
-| key | model | gen | layers/hidden | taps (aux+final) | quant | drafter |
-|---|---|---|---|---|---|---|
-| `4b` | Qwen/Qwen3.5-4B | 3.5 | 32 / 2560 | [2,10,17,24,29]+32 | ✅ 0.1087 | ✅ τ 3.79 |
-| `0.8b` | Qwen/Qwen3.5-0.8B | 3.5 | 24 / 1024 | [2,8,12,16,20]+24 | ✅ local | ⬜ pilot |
-| `9b` | Qwen/Qwen3.5-9B | 3.5 | 32 / 4096 | same depth | ✅ 0.0889 | ⬜ untested |
-| `27b` | Qwen/Qwen3.8-27B | 3.8 | 64 / 5120 | [2,17,32,47,61]+64 | ✅ 0.1264 | ⬜ NO-GO |
+Absolute KL/τ are **not comparable across release generations** — keep
+results per-model; untested rows stay untested in `RESULTS.md` until
+someone runs them.
 
-Absolute KL/τ are **not comparable across release generations** (3.8 ≠ 3.5) —
-keep results per-model. The champion recipe is validated on 4B; 9B/27B rows
-stay "untested" in `RESULTS.md` until someone runs them.
+## Conventions
 
-## Sequence 1 — reproduce a quant (quant venv; 4B ≈ 24GB, ~2h)
+Untracked (gitignored): `runs/` `results/` `slices/` `states/` `ds_*/`
+`draft_*/` `eval_*/` `data-raw/` `smoke/` + local quant artifacts as bare
+root dirs `*-W4A16-GPTQ*`. Hub pulls land in the standard
+`~/.cache/huggingface`; the repo keeps no local model copies.
+Names are what things are (`Qwen3.5-<size>-W4A16-GPTQ`), never the
+experiment that produced them — details in each subproject README.
 
-```bash
-python quants/quantize.py --model 4b          # gptq + cascade-v1 calib, 999x4096 (defaults)
-python quants/probe.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ \
-    --eval_set data/probe-v4.jsonl --tag repro
-# expect weightedKL ≈ 0.1087; also probe data/probe-guard.jsonl (OOD check)
-```
-
-For 9B/27B: same commands with `--model 9b` / `--model 27b` (27B quant wants
-~80GB or device offload; 9B probe holds base+quant resident, ~40GB).
-Build new calib/probe sets with `quants/build_calib.py` (raw pool goes in
-`data-raw/`, not in git). `--mode v1-repro` reconstructs the frozen
-cascade-v1 calib byte-exact from that pool and self-verifies (see the
-reproducibility contract).
-
-## Sequence 2 — drafter, small scale (drafter venv; Spark or any 24GB+ GPU)
-
-```bash
-python drafters/slice_convs.py --preset small --quant ./Qwen3.5-4B-W4A16-GPTQ
-vllm serve ./Qwen3.5-4B-W4A16-GPTQ --port 8138 &     # the DEPLOYED quant
-python drafters/regen.py slices/s_train.jsonl slices/s_regen.jsonl slices/s_merged.jsonl --model 4b
-python drafters/prep_dataset.py --jsonl slices/s_merged.jsonl --out ds_small --quant ./Qwen3.5-4B-W4A16-GPTQ
-python drafters/extract_states.py --dataset ds_small --verifier ./Qwen3.5-4B-W4A16-GPTQ \
-    --out ds_small --model 4b --parity 20
-python drafters/bootstrap_draft.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ --out draft_init
-# train command: drafters/train.md (small-scale section; sdpa on Spark)
-bash drafters/eval_ladder.sh draft_small/0 small 15 8151      # expect τ ≈ 2.18
-```
-
-Full-corpus regen (any registered model) is one command —
-`drafters/regen_pool.sh <model-key>` serves the deployed quant with
-`models.py SERVING_PARAMS` and regenerates every context's final,
-resume-safe; outputs land in `data/`.
-
-The two rules that are not optional: states come from a **transformers**
-forward on the quant (vLLM extraction is corrupt on W4A16 — any hardware),
-and states must be **N+1 taps** (aux + final; `--model` fills this for you).
-
-## Sequence 3 — champion scale (1×B200/B300 + ~4TB NVMe, ~$60 rental)
-
-Same sequence with `--preset v4` (100k convs → 260M tokens; fp8 6-tap states
-≈ 3.2TB — disk is the gating resource), then both train arms from
-`drafters/train.md` at checkpoint-freq 1. Expect τ ≈ 3.8 at the serving point
-(temp 0.7) vs native MTP ≈ 2.9 — measure the MTP baseline on your own ladder
-first (`drafters/train.md`); published MTP numbers are harness-specific.
-Checkpoint selection: `bash drafters/sweep_epochs.sh <checkpoints_parent>
-<sweep_name>` — runs the serving-temp ladder (`TEMP=0.7`) across every epoch
-and extra repeats on the top contenders, emitting a ranked table with
-pooled n. τ rises monotonically to end-of-training at 0.7, but the ranking
-is temperature-dependent (greedy peaks mid-run); never rank on single draws
-(see the measurement protocol in `AGENTS.md`).
-
-## Data (frozen, in git under `data/`)
-
-Frozen **deliberately**: every published number is measured on these exact
-files (weightedKL on probe-v4, rollout agreement on traj-v1, τ on ladder-20),
-so drifting them silently
-breaks cross-run comparability. Verify your checkout:
-
-```bash
-(cd data && sha256sum -c MANIFEST.sha256 --quiet && echo data OK)
-```
-
-| file | what | provenance |
-|---|---|---|
-| `calib-cascade-v1.jsonl` | champion calibration set (999 rows) | 100% nvidia/Nemotron-Cascade-2-SFT-Data, dataset-native proportions (verified 2026-10-16) |
-| `probe-v4.jsonl` | frozen 378-row fidelity ruler (the weightedKL metric) | cascade pool per V4_TARGETS + Belebele 10×9 langs |
-| `probe-guard.jsonl` | OOD guard (no_robots 40 + Belebele 4×9 langs) | no_robots **train** split (verified vs cached upstream arrows) + facebook/belebele |
-| `traj-v1.jsonl` | frozen 301-row rollout-agreement ruler (greedy 32-token trajectory match vs base — the compounding regime teacher-forced KL can't see) | cascade pool per TRAJ_TARGETS (agentic 100: terminal 50/swe 25/conv_agent 25; math 60, IF 25, chat 40, chat_long 40 @ 12–24K chars, Belebele 4×9 fresh rows) |
-| `traj-v1.jsonl.sources.json` | provenance sidecar for traj-v1 (19 upstream shard hashes) | written by the build that froze it |
-| `ladder-20.jsonl` | the 20 held-out eval prompts (the τ metric) | rows 50–69 of the v1-era 100-row cascade dev set (`dflash_data_v1`), frozen since the first DFlash2 run; hash-banned from drafter training, disjoint from the probes. Prompt texts recur inside calib rows (both cascade-derived) — affects no quoted number |
-| `conv-ids/` | conversation-id manifests for the v3/v4/v5 training slices | exact `slice_convs.py` preset outputs — deterministically reproducible (seeds, per-subset rounding, val sampling all verified against the manifests) |
-| `MANIFEST.sha256` | hash pin for everything above | `find . -type f ! -name MANIFEST.sha256 \| sort \| sed 's|^\./||' \| xargs sha256sum` (prefix-free so `sha256sum -c` and the uploader's set check both round-trip) |
-
-**Where each set is used** — three processes, three roles, deliberately
-walled off (all frozen sets pairwise hash-disjoint; builders enforce it):
-
-| process | uses | notes |
-|---|---|---|
-| quantization (`quants/quantize.py`) | `calib-cascade-v1` only | activations decide GPTQ grouping; no_robots/Belebele never enter — keeps the guard honest |
-| drafter training (`drafters/slice_convs.py` → `regen.py` → …) | cascade pool prompts via `conv-ids` presets | slices hash-banned from every frozen set; `regen.py` rewrites assistant turns with the deployed quant — training data is quant-written completions + quant states, never cascade's original assistant text, never bf16 |
-| evaluation (`quants/probe.py`, `quants/traj_probe.py`, `drafters/eval_ladder.sh`) | `probe-v4` → headline weightedKL; `traj-v1` → rollout agreement (agree@1, exact@32, per-domain — where looping/tool-format drift shows); `probe-guard` → OOD anti-gaming check; `ladder-20` → headline τ + per-epoch checkpoint selection | ladder-20 is hash-banned from training; probe-guard and traj-v1 are consumed by nothing upstream — pure held-out referees |
-
-One documented exception: ladder-20 prompt texts recur inside calib rows (both
-cascade-derived) — τ compares drafters against the same target model, so the
-overlap can't game it. `regression.sh` regenerates its own smoke dataset and
-never reads `data/`.
-
-**Reproducibility contract.** `quants/build_calib.py` builds *new* sets of each
-calib/probe/guard kind — always hash-disjoint from the frozen ones (freshness
-by design, not regeneration). Every build writes a `<out>.sources.json` sidecar
-pinning each upstream file it read (dataset revision + SHA256), so silent
-upstream drift (HF reshards, split-order flips) is detectable by diffing
-sidecars. The no_robots split is explicit (`--no-robots-split`, default `train`
-= the frozen set's actual source split, verified against the cached upstream
-arrows; the converted-parquet API has served split lists in unstable order).
-One exception, closed 2026-10-17: `calib-cascade-v1` **is** regenerable —
-`--mode v1-repro` rebuilds it **byte-exact** from the raw pool
-(`data-raw/cascade/`, 21 parquet shards, gitignored like all raw pools and
-hash-pinned in `data/MANIFEST.raw-pools.sha256` — verify with
-`sha256sum -c data/MANIFEST.raw-pools.sha256` from the repo root; the pin file
-itself is registered in `data/MANIFEST.sha256`). The mode refuses to write
-into `data/` and self-verifies both artifacts — the calib against the frozen
-file's bytes, the co-built day-0 probe companion against the original ruler's
-pinned sha256 — exiting nonzero on any drift. probe-v4 and probe-guard stay
-freshness-by-design: new builds are hash-disjoint, never regenerations.
-
-**Licenses** (check before redistributing): cascade-derived sets → NVIDIA Open
-Model License; probe-guard no_robots rows → CC-BY-NC-4.0 (non-commercial);
-Belebele rows → CC-BY-SA-4.0. Regen outputs are Qwen model outputs.
-
-**HF mirror:** the frozen sets are dual-homed at
-`nchapman/warp-3090-quant-lab-frozen-data` (**public**, CC-BY-NC-4.0 top-level
-per the card — non-commercial research use; see license note above). Pinned at
-commit `945980f`, verify against
-`data/MANIFEST.sha256` after pulling). Good reason to freeze *on the Hub*
-rather than git alone: revision-hash citability, pull-by-pods without a repo
-clone, and a license/provenance surface git can't provide.
-
-**Published models (one recipe each, no version zoo):** the champion quants
-live at the `quant_repo` ids in `models.py` (`nchapman/Qwen3.5-4B-W4A16-GPTQ`,
-`…-9B…`, `nchapman/Qwen3.8-27B-W4A16-GPTQ` — each card pins the calibration
-generation as `calib-cascade-v1`). The champion drafter lives at
-`nchapman/Qwen3.5-4B-DFlash2` (standard speculators naming — model it drafts
-for, no quant marker: measured drafting against both the quant verifier and
-the bf16 base; weights sha256 in the card). Earlier drafter generations
-(v3, v3.5) and the v4 per-epoch snapshots stay as local research record
-under `../llm-compressor/artifacts/` (read-only archive — never written to).
-The regen context pool is IN this repo (`data/context_pool.jsonl`,
-sha-pinned) and per-model regen outputs land in `data/` (gitignored,
-pinned when frozen).
-
-**Naming rule:** quants are named for what they are —
-`Qwen3.5-<size>-W4A16-GPTQ` — never for the calibration experiment that
-produced them. (A `-cascade` dir suffix existed historically to mark the
-calib generation; retired 2026-10-16 — historical dirs keep their names,
-nothing new gets one. The citable calib version is the frozen-data pin.)
-Dataset files are named for their purpose (`calib-*`, context pool, regen
-outputs) with sources documented in the table above.
-
-**Models & cache:** Hub ids are the canonical model references (`models.py`
-resolves them); anything pulled from the Hub lands in the standard
-`~/.cache/huggingface` — the repo sets no custom cache dirs and keeps no
-local model copies. `quantize.py` outputs and eval working copies
-(`eval_*/`, `Qwen3*/`) are transient, gitignored, and disposable: upload what
-you keep, delete the rest.
-
-## Run logging standard (no more guessing)
-
-Every script and tool in this repo logs the same way — the process failures
-this project has hit (silent input mismatch, wedged servers, results in
-unexpected places) are failure modes of unmanaged runs, not of the models.
-
-- **Every run** — evals, regression, quantize, probe, calib builds — gets
-  `runs/<name>.<UTC ts>/` with `cmd.txt` (exact invocation) and
-  `events.jsonl` (structured lifecycle: `RUN_START`, `PREFLIGHT_OK/FAIL`,
-  `SERVER_LAUNCH/HEALTHY/STUCK/FAILED`, stage markers, `RUN_DONE/RUN_FAILED`).
-- **Preflight or die**: inputs are validated by name before anything launches
-  (`require_file`).
-- **Watchdogged servers**: health waits fail fast — a server whose log goes
-  idle *and* whose GPU is 0% for two consecutive probes is `SERVER_STUCK`,
-  killed by its recorded PID, with a process snapshot in the log. No
-  15-minute silent hangs. (`EXTRA_SERVE_ARGS="--enforce-eager"` dodges
-  cudagraph-capture wedges when throughput doesn't matter.)
-- **Servers die by PID** — never `pkill` scatter.
-- Inspect any run: `bash scripts/tail_run.sh [name-prefix]`.
-
-`lib/runlib.sh` is the bash implementation (sourced by `regression.sh`,
-`drafters/eval_ladder.sh`, `drafters/eval_mtp.sh`); `lib/lablog.py` is the
-python mirror (`probe.py`, `quantize.py`, `build_calib.py`). New scripts
-must source/import one of them — no exceptions.
-
-## Layout
-
-```
-models.py            family registry (dims, taps, hub ids, SERVING_PARAMS) — single source of truth
-lib/                 shared run plumbing: runlib.sh (bash) + lablog.py (python)
-quants/              quant workflow: build_calib · quantize · run_quant · probe · traj_probe ·
-                     verify_quant · publish_quant · capability_battery · battery_report · cards/
-drafters/            drafter workflow: slice_convs · regen · regen_pool · prep_dataset ·
-                     extract_states · reshape_tokens · slice_rungs · data_ladder · sweep_epochs ·
-                     bootstrap_draft · eval_ladder · eval_mtp · bench_subsets · data_audit ·
-                     train.md · draft_config_*.json
-finetune/            managed/external FT workflows (charter in its README; scaffold)
-data/                frozen calib/probe/ladder/conv-ids + context_pool.jsonl (pinned) +
-                     regen outputs (gitignored, pinned when frozen) — the reproducible half of every number
-patches/             speculators patches (fp8 load-cast, draft-OPD)
-docs/                current-state docs: external_references · compute-platforms · data_scaling
-experiments/         closed campaigns — code + docs + records frozen together
-  quants/            calib-v2 arm (regen_calib_* · build_if3x_append · ifeval_modes ·
-                     mini_moe_smoke) + records/ (battery audits, H200 probe, bench csvs)
-  drafters/          draft-OPD + dflash2 v5 research (opd_* · split_holdout · launch/overnight
-                     drivers · campaign_check) + notebooks + records/
-scripts/             pod-side ops: pod_prep · podsh · pod_pull_pass · pod_status ·
-                     tail_run · evict_load_cache · upload_frozen_data
-hf/                  HF mirrors: quants/ (model cards) · frozen-data/ (data mirror README)
-issues/              open engineering issues
-regression.sh        100-row end-to-end pre-flight (<15 min, one GPU)
-pod.sh               push/run/pull helper for rented Blackwell pods
-RESULTS.md           every measured number, per model
-```
-
-Untracked conventions (gitignored): `runs/` `results/` `slices/` `states/`
-`ds_*/` `draft_*/` `eval_*/` `data-raw/` `smoke/` — plus local quant
-artifacts as bare root dirs matching `*-W4A16-GPTQ*` (quants are named for
-what they are; `models.py` resolves these bare names).
-
-Historical receipts (`experiments/*/records/`, `runs/`, pod snapshots) may
-cite pre-reorg paths — `drafter/`, `quant/`, the old root `quants/` artifact
-dir. They are frozen evidence, not living docs; don't rewrite them.
+Historical receipts (`experiments/*/records/`, pod snapshots) may cite
+pre-reorg paths (`drafter/`, `quant/`, old root `quants/` artifact dir) —
+frozen evidence, not living docs; don't rewrite them.
 
 Provenance: extracted from the `quant-lab` branch of our llm-compressor fork
 (no library modifications — llm-compressor is consumed as a pinned dependency).
