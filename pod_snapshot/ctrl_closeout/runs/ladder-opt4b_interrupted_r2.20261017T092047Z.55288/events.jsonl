@@ -1,0 +1,9 @@
+{"ts": "2026-10-17T09:20:47.902Z", "type": "RUN_START", "name": "ladder-opt4b_interrupted_r2", "dir": "/root/warp-3090-quant-lab/runs/ladder-opt4b_interrupted_r2.20261017T092047Z.55288"}
+{"ts": "2026-10-17T09:20:47.949Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-17T09:20:48.026Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_opt4b_interrupted_r2"}
+{"ts": "2026-10-17T09:20:48.141Z", "type": "SERVER_LAUNCH", "pid": "55307", "log": "/root/warp-3090-quant-lab/vllm_eval_opt4b_interrupted_r2.log"}
+{"ts": "2026-10-17T09:24:49.603Z", "type": "SERVER_HEALTHY", "elapsed": "241s", "port": "8151"}
+{"ts": "2026-10-17T09:24:49.660Z", "type": "PROMPTS_START", "n": "20 temp=0.7"}
+{"ts": "2026-10-17T09:25:14.009Z", "type": "PROMPTS_DONE"}
+{"ts": "2026-10-17T09:25:41.207Z", "type": "SERVER_STOPPED", "pid": "55307", "signal": "TERM"}
+{"ts": "2026-10-17T09:25:41.249Z", "type": "RUN_DONE", "status": "ok", "tau": "opt4b_interrupted_r2 1.348 accepted=1266"}

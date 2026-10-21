@@ -1,0 +1,588 @@
+"""W4A16 quantization for the Qwen 3.5 release family using llm-compressor.
+
+Champion recipe (what we published): plain GPTQ, cascade-v1 calibration,
+999 samples x 4096 tokens. Algorithm/precision rationale lives in the README
+(warp-3090: 24GB Ampere budget).
+
+Usage:
+  python quants/quantize.py --model 4b                      # champion cascade quant
+  python quants/quantize.py --model 27b --algo gptq
+  python quants/quantize.py --model 4b --algo awq --tag awq-cascade
+  python quants/quantize.py --model 4b --calib data/calib-cascade-v1.jsonl --num-samples 512
+
+Calibration: --calib takes a jsonl path (default: the frozen cascade-v1 set in
+data/) or a comparison-set name (cyankiwi | hermes | ultrachat, fetched from HF).
+"""
+
+import argparse
+import json
+import random
+import sys
+from pathlib import Path
+
+import torch
+
+# B200 (2026-10-17, 35B first attempt): cuDNN SDPA allocates per-shape
+# workspace; at >99% HBM the allocation fails inside the calibration forward
+# as CUDNN_STATUS_INTERNAL_ERROR — an OOM wearing a cuDNN costume. The
+# flash/efficient/math backends need no such workspace. Mechanics-only fix;
+# recipe untouched.
+torch.backends.cuda.enable_cudnn_sdp(False)
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from models import model_class, resolve  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+
+from datasets import Dataset, load_dataset  # noqa: E402
+from transformers import AutoProcessor  # noqa: E402
+
+from llmcompressor import oneshot  # noqa: E402
+from llmcompressor.modeling.moe.linearize import load_quantizable_moe  # noqa: E402
+from llmcompressor.modifiers.autoround import AutoRoundModifier  # noqa: E402
+from llmcompressor.modifiers.gptq import GPTQModifier  # noqa: E402
+from llmcompressor.modifiers.quantization import QuantizationModifier  # noqa: E402
+from llmcompressor.modifiers.transform.awq import AWQModifier  # noqa: E402
+
+MAX_SEQUENCE_LENGTH = 4096
+
+
+def normalize_messages(conversation):
+    # flatten OpenAI-style tool_calls; Qwen3.5 template wants dict arguments
+    messages = []
+    for message in conversation:
+        msg = {"role": message["role"], "content": message.get("content") or ""}
+        if message.get("tool_calls"):
+            tool_calls = []
+            for call in message["tool_calls"]:
+                call = dict(call.get("function") or {})
+                args = call.get("arguments", {})
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        args = {}
+                call["arguments"] = args
+                tool_calls.append(call)
+            msg["tool_calls"] = tool_calls
+        messages.append(msg)
+    return messages
+
+
+def load_jsonl_calib(path, num_samples):
+    rows = []
+    with open(path) as f:
+        for line in f:
+            r = json.loads(line)
+            msgs = r.get("messages") or r.get("conversations")
+            rows.append(normalize_messages(msgs))
+    return rows[:num_samples]
+
+
+def load_cyankiwi(num_samples):
+    ds = load_dataset("cyankiwi/calibration", split="train")
+    return [normalize_messages(c) for c in ds["conversations"][:num_samples]]
+
+
+def load_hermes(num_samples):
+    # code-agent blend: real API tool calls, multi-turn function calling,
+    # and agentic structured output
+    shares = {"func_calling": 0.4, "glaive_func_calling": 0.4, "json_mode_agentic": 0.2}
+    role_map = {"human": "user", "gpt": "assistant", "system": "system", "tool": "tool"}
+
+    parts = []
+    for name, share in shares.items():
+        ds = load_dataset(
+            "NousResearch/Hermes-Function-Calling-V1", name, split="train"
+        ).shuffle(seed=42)
+        msgs = [
+            [{"role": role_map[m["from"]], "content": m["value"]} for m in conv]
+            for conv in ds["conversations"]
+        ]
+        parts.append(msgs[: int(num_samples * share)])
+
+    combined = [m for part in parts for m in part]
+    return combined[:num_samples]
+
+
+def load_ultrachat(num_samples):
+    ds = load_dataset(
+        "HuggingFaceH4/ultrachat_200k", split="train_sft"
+    ).shuffle(seed=42)
+    return [m for m in ds["messages"][:num_samples]]
+
+
+def load_perfectblend(num_samples):
+    # ecosystem-default blend (llmcompressor ships a first-class class for it;
+    # here we load it through the same role-mapped path as hermes so the ONLY
+    # variable vs cascade-v1 is the data source). ShareGPT schema: from/value.
+    role_map = {"human": "user", "gpt": "assistant", "system": "system"}
+    ds = load_dataset("mlabonne/open-perfectblend", split="train").shuffle(
+        seed=42
+    )
+    msgs = [
+        [{"role": role_map.get(m["from"], m["from"]), "content": m["value"]}
+         for m in conv]
+        for conv in ds["conversations"][:num_samples]
+    ]
+    return msgs
+
+
+NAMED_CALIBRATIONS = {
+    "cyankiwi": load_cyankiwi,
+    "hermes": load_hermes,
+    "ultrachat": load_ultrachat,
+    "perfectblend": load_perfectblend,
+}
+
+
+def get_calibration_dataset(processor, calib, num_samples, max_seq_length,
+                             window="head", seed=0):
+    tokenizer = processor.tokenizer
+    if calib in NAMED_CALIBRATIONS:
+        conversations = NAMED_CALIBRATIONS[calib](num_samples)
+    else:
+        path = Path(calib)
+        if not path.is_absolute():
+            path = ROOT / path
+        conversations = load_jsonl_calib(path, num_samples)
+
+    def tokenize(sample):
+        try:
+            text = processor.apply_chat_template(
+                normalize_messages(sample["messages"]), tokenize=False
+            )
+        except Exception:
+            return {"input_ids": [], "attention_mask": []}
+        # window policy — WHERE the max_seq_length budget is cut from each
+        # row. head = right-truncation (champion behavior: first tokens).
+        # tail = left-truncation (last tokens — answers/end-of-trajectory).
+        # random = seeded uniform window (coverage control, order-independent
+        # per-row seed derived from the text hash).
+        if window == "random":
+            import hashlib
+            rng = random.Random(hashlib.sha256(text.encode()).digest()[:8]
+                                + seed.to_bytes(4, "big"))
+            enc = tokenizer(text, padding=False, truncation=False,
+                            add_special_tokens=False)
+            ids = enc["input_ids"]
+            if len(ids) > max_seq_length:
+                off = rng.randrange(0, len(ids) - max_seq_length + 1)
+                ids = ids[off:off + max_seq_length]
+                return {"input_ids": ids,
+                        "attention_mask": [1] * len(ids)}
+            return {"input_ids": ids, "attention_mask": enc["attention_mask"]}
+        tokenizer.truncation_side = "left" if window == "tail" else "right"
+        return tokenizer(
+            text,
+            padding=False,
+            max_length=max_seq_length,
+            truncation=True,
+            add_special_tokens=False,
+        )
+
+    ds = Dataset.from_list([{"messages": m} for m in conversations])
+    ds = ds.map(tokenize, remove_columns=ds.column_names)
+    ds = ds.filter(lambda x: len(x["input_ids"]) > 0)
+    print(f"calibration samples ({calib}): {len(ds)}")
+    return ds
+
+
+def build_recipe(algo, moe=False, full_bit_attn=False):
+    # What stays BF16, and why (history matters here):
+    # - lm_head + vision tower: original policy (481316e, 10-13).
+    # - GDN per-head gates in_proj_a/b: BF16 for DENSE models only from
+    #   fc5be92 (10-16, MoE ignore), GLOBAL from d281deb (10-18) — two
+    #   reasons: N=32/48 breaks Marlin (SGLang) N%64 packing at load
+    #   (found on the 27B), and fused_N not div-64 broke per-group axis
+    #   alignment (early-layer Hessians exploded). Pre-10-18 artifacts
+    #   (the shipped 4B champion) have a/b W4: vLLM-servable, NOT
+    #   SGLang/Marlin-safe.
+    # - shared_expert (MoE only): always-on dense path, ~180MB.
+    # assert_packed_div64() guards exports; in_proj_a/b BF16 is a
+    # COMPAT requirement, not a precision choice — do not remove.
+    ignore = ["lm_head", "re:.*visual.*",
+              r"re:.*linear_attn\.in_proj_a$",
+              r"re:.*linear_attn\.in_proj_b$"]
+    # MoE-family (qwen3_5_moe) additions — verified empirically against
+    # llmcompressor 0.14.1a (mini e2e): the router needs NO ignore entry
+    # (Qwen3_5MoeTopKRouter is a raw nn.Parameter, never matched by
+    # targets="Linear"; llmcompressor still materializes it into the
+    # artifact's explicit ignore list automatically). Kept at BF16:
+    # shared expert + its [1,2048] gate (always-active dense path; Intel
+    # AutoRound MoE recipe + palmfuture GPTQ precedent, ~180MB).
+    moe_ignore = ["re:.*shared_expert.*"]
+    ignore = ignore + (moe_ignore if moe else [])
+    if algo == "gptq":
+        return GPTQModifier(targets="Linear", scheme="W4A16",
+                             ignore=_gptq_ignore(moe, full_bit_attn))
+    if algo == "duo":
+        # the library's canonical recipe verbatim (examples/quantization_w4a16/
+        # qwen3_8_gptq_awq_example.py): AWQ pre-scaling + GPTQ, with the
+        # library's own ignore list (keeps linear_attn in_proj_a/b at BF16).
+        # NOTE: AWQ calibration caches scale linearly with tokens — at 999x4096
+        # even 275GB VRAM OOMs; offload to CPU is protocol-safe. We measured
+        # duo at library budget (512x384) LOSES to plain GPTQ at 999x4096
+        # (weightedKL 0.1209 vs 0.1087; agentic domains worst). Kept for
+        # reproduction only.
+        ignore = [
+            "re:visual.*", "re:model.visual.*", r"re:.*lm_head",
+            r"re:.*embed_tokens$", r"re:.*linear_attn\.in_proj_a$",
+            r"re:.*linear_attn\.in_proj_b$",
+        ]
+        return [
+            AWQModifier(duo_scaling="both", offload_device=torch.device("cpu")),
+            GPTQModifier(targets="Linear", scheme="W4A16",
+                         ignore=ignore + (moe_ignore if moe else [])),
+        ]
+    if algo == "awq":
+        # AWQModifier scales salient channels; QuantizationModifier quantizes
+        return [
+            AWQModifier(),
+            QuantizationModifier(targets="Linear", scheme="W4A16", ignore=ignore),
+        ]
+    if algo == "autoround":
+        # sign-gradient optimization of rounding offsets and clipping ranges
+        return AutoRoundModifier(
+            targets="Linear", scheme="W4A16", ignore=ignore, iters=200
+        )
+    raise ValueError(f"unknown algo: {algo}")
+
+
+def _base_snapshot_safetensors(hub_id: str):
+    """Base-checkpoint shard paths (hub snapshot dir or a local model dir)."""
+    from huggingface_hub import snapshot_download
+
+    base = Path(hub_id) if Path(hub_id).exists() else Path(
+        snapshot_download(hub_id, local_files_only=True)
+    )
+    return sorted(base.glob("*.safetensors"))
+
+
+def _evict_file_cache(paths) -> int:
+    """posix_fadvise(DONTNEED) each file so the kernel drops its clean pages.
+    Returns total bytes evicted. No root needed; only clean cache is dropped."""
+    import ctypes
+    import os as _os
+
+    POSIX_FADV_DONTNEED = 4
+    libc = ctypes.CDLL(None, use_errno=True)
+    total = 0
+    for p in paths:
+        fd = _os.open(str(p), _os.O_RDONLY)
+        try:
+            libc.posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED)
+            total += _os.fstat(fd).st_size
+        finally:
+            _os.close(fd)
+    return total
+
+
+def _start_cache_reclaimer(gap_gb=4.0, interval_s=5.0):
+    """Daemon that keeps the CUDA caching allocator honest on GB10 unified
+    memory. During transformers-5.x MoE loads, one large transient (~29GB
+    observed on 35B) is allocated and freed but stays RESERVED (non-
+    releasable: outstanding stream refs) — reserved-but-unallocated memory
+    still counts against MemAvailable, so the load dies at ~50% with a
+    perfectly healthy live set. synchronize() + empty_cache() returns
+    inactive blocks to the system (2026-10-17 snapshot probe: reserved
+    65.4GB vs live 36.4GB, single 29.7GB inactive block)."""
+    import threading
+
+    stop = threading.Event()
+    reclaimed = [0.0]
+
+    def loop():
+        while not stop.wait(interval_s):
+            try:
+                gap = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
+                if gap > gap_gb * 2**30:
+                    torch.cuda.synchronize()
+                    before = torch.cuda.memory_reserved()
+                    torch.cuda.empty_cache()
+                    got = (before - torch.cuda.memory_reserved()) / 2**30
+                    reclaimed[0] += got
+                    with open("/proc/self/statm") as f:
+                        rss = int(f.read().split()[1]) * 4096 / 2**30
+                    print(f"[reclaimer] gap {gap / 2**30:.1f}GB -> "
+                          f"released {got:.1f}GB "
+                          f"(reserved {torch.cuda.memory_reserved() / 2**30:.1f}GB "
+                          f"alloc {torch.cuda.memory_allocated() / 2**30:.1f}GB "
+                          f"rss {rss:.1f}GB)", flush=True)
+            except Exception as e:
+                print(f"[reclaimer] error: {e!r}", flush=True)
+
+    threading.Thread(target=loop, daemon=True, name="cuda-cache-reclaimer").start()
+    return stop, reclaimed
+
+
+def _kill_uma_warmup():
+    """No-op transformers' caching_allocator_warmup (modeling_utils.py:4418,
+    defined ~5106). It pre-allocates a full-model-sized buffer (65.4GiB at
+    35B: byte_count//2 as fp16) purely to defragment the CUDA cache, then
+    frees it. On discrete GPUs that's free; on GB10 unified memory the freed
+    block stays cache-reserved as real RAM — every big-model load died at
+    43-55% with exactly this much memory missing (runs 1-7, 2026-10-17).
+    Upstream already skips warmup on MPS/Neuron; same reasoning here."""
+    import transformers.modeling_utils as _mu
+    _mu.caching_allocator_warmup = lambda *a, **k: None
+
+
+def assert_packed_div64(save_dir):
+    """Every packed weight must have logical N % 64 == 0 (Marlin floor).
+
+    Reads the logical shape from the weight_shape sidecar tensors llmcompressor
+    writes next to each weight_packed entry. Raises with the offender list so a
+    bad recipe cannot silently ship an SGLang-unloadable checkpoint.
+    """
+    from safetensors import safe_open
+    import glob
+    bad = []
+    for shard in sorted(glob.glob(f"{save_dir}/*.safetensors")):
+        with safe_open(shard, framework="pt") as f:
+            keys = set(f.keys())
+            for k in keys:
+                if not k.endswith("weight_shape"):
+                    continue
+                packed = k[: -len("weight_shape")] + "weight_packed"
+                if packed not in keys:
+                    continue
+                # weight_shape holds the LOGICAL [N, K] as a 2-elem tensor;
+                # read its VALUES (its own shape is just [2]).
+                logical = f.get_tensor(k)
+                n = int(logical[0])
+                if n % 64 != 0:
+                    bad.append(f"{k[:-len('_shape')]} N={n}")
+    if bad:
+        raise AssertionError(
+            f"packed tensors with N % 64 != 0 (Marlin/SGLang breakers): {bad}")
+    print(f"assert_packed_div64: OK ({save_dir})")
+
+
+def _gptq_ignore(moe=False, full_bit_attn=False):
+    """Canonical gptq-path ignore list (shared by build_recipe and the
+    pre-flight div64 check — keep in sync or the invariant drifts)."""
+    ignore = ["lm_head", "re:.*visual.*",
+              r"re:.*linear_attn\.in_proj_a$",
+              r"re:.*linear_attn\.in_proj_b$"]
+    if full_bit_attn:
+        # precision-side ablation (--full-bit-attn, a8c734f 10-19): the BIG
+        # attention projections (self_attn q/k/v/o + linear_attn qkv/z/out)
+        # stay BF16 too; MLP/experts stay W4. Distinct from the a/b compat
+        # ignore above: this one is a deliberate precision experiment,
+        # ~1.30B params (+1.9GB on 4B). Regex matches any module path with
+        # both 'attn' and 'proj' — self_attn.* and linear_attn.* only.
+        ignore.append(r"re:.*attn.*proj.*$")
+    return ignore + (["re:.*shared_expert.*"] if moe else [])
+
+
+def _matches_ignore(name, ignore):
+    """llmcompressor ignore semantics: exact string, or 're:'-prefixed regex."""
+    for pat in ignore:
+        if pat.startswith("re:"):
+            import re
+            if re.search(pat[3:], name):
+                return True
+        elif name == pat or name.endswith("." + pat):
+            return True
+    return False
+
+
+def assert_preflight_div64(model, moe=False, full_bit_attn=False):
+    """Fail BEFORE any GPU work: every Linear that will be GPTQ-packed must
+    have out_features % 64 == 0 (Marlin/SGLang kernel constraint), unless it
+    is on the ignore list (stays bf16, never packed). Same predicate as
+    assert_packed_div64() but computed pre-quantization — catches recipe
+    gaps in seconds instead of after a full quant run (2026-10-18: the
+    post-hoc guard cost a 46-min run to discover in_proj_a/b N=32)."""
+    import torch.nn as nn
+    ignore = _gptq_ignore(moe, full_bit_attn)
+    bad = [f"{name} N={m.out_features}"
+           for name, m in model.named_modules()
+           if isinstance(m, nn.Linear)
+           and m.out_features % 64 != 0
+           and not _matches_ignore(name, ignore)]
+    if bad:
+        raise AssertionError(
+            f"pre-flight: Linear layers with out_features % 64 != 0 that are "
+            f"NOT on the ignore list (would export as Marlin breakers): {bad}"
+        )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model", default="4b",
+                        help="model key from models.py (0.8b|4b|9b|27b|35b) or "
+                             "a full hub id / local path")
+    parser.add_argument("--algo", choices=["gptq", "duo", "awq", "autoround"],
+                        default="gptq")
+    parser.add_argument("--calib", default="data/calib-cascade-v1.jsonl",
+                        help="calibration jsonl path or comparison-set name "
+                             "(cyankiwi|hermes|ultrachat|perfectblend)")
+    parser.add_argument("--num-samples", type=int, default=999,
+                        help="champion regime is 999; library default is 512")
+    parser.add_argument("--max-seq-length", type=int, default=MAX_SEQUENCE_LENGTH,
+                        help="calibration truncation length (library default "
+                             "regime is 384)")
+    parser.add_argument("--window", choices=["head", "tail", "random"],
+                        default="head",
+                        help="where the truncation budget is cut from each "
+                             "calib row: head (first tokens, champion), tail "
+                             "(last tokens — answers, end-of-trajectory), "
+                             "random (seeded uniform window)")
+    parser.add_argument("--seed", type=int, default=0,
+                        help="seed for --window random (0 = fixed default)")
+    parser.add_argument("--tag", default=None, help="output dir suffix")
+    parser.add_argument("--full-bit-attn", action="store_true",
+                        help="keep ALL attention projections (self_attn "
+                             "q/k/v/o + linear_attn in/out) at BF16; "
+                             "MLP/experts stay W4A16")
+    args = parser.parse_args()
+    from lib.lablog import log_event
+    log_event("RUN_START", model=args.model, algo=args.algo, calib=args.calib)
+
+    hub_id, info = resolve(args.model)
+    base_name = hub_id.split("/")[-1]
+    save_dir = f"{base_name}-W4A16-{args.algo.upper()}"
+    # naming rule: quants are named for WHAT THEY ARE (model + recipe), never
+    # for the calib experiment that produced them — calib provenance lives in
+    # run logs and data/MANIFEST.sha256, not the dir name (retired 2026-10-16:
+    # the old '-cascade' auto-suffix)
+    if args.tag:
+        save_dir += f"-{args.tag}"
+
+    model_cls = model_class(hub_id)
+    is_moe = model_cls.__name__ == "Qwen3_5MoeForConditionalGeneration"
+
+    reclaim_stop, reclaimed = _start_cache_reclaimer()
+    _kill_uma_warmup()
+    if is_moe:
+        # MoE: linearize fused experts at LOAD time — this also registers the
+        # save-side repack mapping (the post-load fallback inside oneshot does
+        # not). oneshot then routes calibration through all experts by default
+        # (moe_calibrate_all_experts=True) and re-copies mtp.* tensors from the
+        # base checkpoint on save.
+        with load_quantizable_moe(model_cls):
+            model = model_cls.from_pretrained(
+                hub_id, dtype="auto", device_map={"": 0}
+            )
+    else:
+        model = model_cls.from_pretrained(hub_id, dtype="auto", device_map={"": 0})
+    reclaim_stop.set()
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
+    log_event("CACHE_RECLAIMED", gb=round(reclaimed[0], 1))
+
+    # Marlin div-64 gate BEFORE any calibration/quantization GPU work —
+    # the post-save assert_packed_div64() is the export gate; this is the
+    # 1-second version of the same invariant (see its docstring).
+    assert_preflight_div64(model, moe=is_moe, full_bit_attn=args.full_bit_attn)
+    log_event("PREFLIGHT_DIV64_OK")
+
+    # GB10 unified memory: the just-read base shards (~67GB for 35b) sit in
+    # page cache NEXT TO the resident model copy — ~2x the model footprint
+    # before any workspace, and pressure-driven reclaim has already once
+    # arrived as a global OOM that shot random userspace (2026-10-17).
+    # Weights are copied onto the device (the mappings are closed: RSS is
+    # tiny), so dropping the cache is safe. load happens via mmap -> device
+    # copy; a re-fault would only mean a slow re-read, never corruption.
+    evicted = _evict_file_cache(_base_snapshot_safetensors(hub_id))
+    log_event("PAGE_CACHE_EVICT", files_gb=round(evicted / 2**30, 1))
+
+    processor = AutoProcessor.from_pretrained(hub_id)
+
+    oneshot_kwargs = dict(
+        model=model,
+        dataset=get_calibration_dataset(
+            processor, args.calib, args.num_samples, args.max_seq_length,
+            window=args.window, seed=args.seed
+        ),
+        recipe=build_recipe(args.algo, moe=is_moe, full_bit_attn=args.full_bit_attn),
+        max_seq_length=args.max_seq_length,
+        num_calibration_samples=args.num_samples,
+    )
+    if args.algo == "autoround":
+        # per llm-compressor example: slightly better accuracy unshuffled
+        oneshot_kwargs["shuffle_calibration_samples"] = False
+
+    oneshot(**oneshot_kwargs)
+
+    model.save_pretrained(save_dir, save_compressed=True)
+    processor.save_pretrained(save_dir)
+    assert_packed_div64(save_dir)
+    # stamp canonical serving params into the artifact so `vllm serve` picks
+    # them up as request defaults (models.SERVING_PARAMS = single source)
+    import models as _m
+    gc = {"do_sample": True, **_m.SERVING_PARAMS,
+          "eos_token_id": processor.tokenizer.eos_token_id,
+          "pad_token_id": processor.tokenizer.eos_token_id}
+    import json as _json
+    with open(f"{save_dir}/generation_config.json", "w") as f:
+        json.dump(gc, f, indent=2)
+    # stamp the release chat template (froggeric v22.5, byte-pinned) as a
+    # standalone file — the exact mechanism the published champion uses
+    # (tokenizer_config carries no embedded template; transformers/vLLM
+    # resolve the standalone file). sha-guarded so a stray edit can't ship.
+    import hashlib as _hl
+    _tpl = Path(__file__).parent / "release_chat_template.jinja"
+    _TPL_SHA = "e57684bae4156211a55473c5a63be976a405a37ab5be5ae0e5abf1df5349c4b2"
+    if not _tpl.is_file():
+        raise FileNotFoundError(f"release template missing: {_tpl}")
+    _got = _hl.sha256(_tpl.read_bytes()).hexdigest()
+    if _got != _TPL_SHA:
+        raise ValueError(
+            f"release_chat_template.jinja sha256 {_got} != pinned {_TPL_SHA}; "
+            "intentional template changes must update the pin")
+    import shutil as _sh
+    _sh.copyfile(_tpl, f"{save_dir}/chat_template.jinja")
+    print(f"saved to {save_dir} (serving params stamped: {_m.SERVING_PARAMS}; "
+          f"release chat template stamped, sha {_TPL_SHA[:12]})")
+
+    if is_moe:
+        # MTP audit: transformers drops mtp.* on load; llmcompressor's
+        # save_mtp_tensors_to_checkpoint re-copies them from the base. Verify
+        # the artifact actually carries them (spec-decode baselines need it).
+        from huggingface_hub import snapshot_download
+        from safetensors import safe_open
+
+        def mtp_keys(path):
+            p = Path(path)
+            idx = p / "model.safetensors.index.json"
+            shards = (
+                {(p / s).resolve() for s in json.loads(idx.read_text())["weight_map"].values()}
+                if idx.exists()
+                else sorted(p.glob("*.safetensors"))
+            )
+            keys = set()
+            for s in shards:
+                with safe_open(s, framework="pt") as f:
+                    keys.update(k for k in f.keys() if k.startswith("mtp."))
+            return keys
+
+        base_path = hub_id if Path(hub_id).exists() else snapshot_download(hub_id)
+        base_keys = mtp_keys(base_path)
+        saved_keys = mtp_keys(save_dir)
+        missing = base_keys - saved_keys
+        log_event("MTP_AUDIT", base=len(base_keys), saved=len(saved_keys),
+                  missing=len(missing))
+        # registry says this model has MTP → the copy MUST have happened;
+        # unknown provenance (raw hub id/path) → require at least parity
+        # with whatever the base carries
+        required = bool(info.get("mtp_num_hidden_layers"))
+        if (required and (not base_keys or saved_keys != base_keys)) or (
+            not required and missing
+        ):
+            raise RuntimeError(
+                f"MTP tensors wrong in artifact (base {len(base_keys)}, saved "
+                f"{len(saved_keys)}, missing {len(missing)}); spec-decode "
+                f"baselines would break")
+        print(f"MTP audit: {len(saved_keys)}/{len(base_keys)} mtp.* tensors copied")
+
+    from lib.lablog import run_done
+    run_done(save_dir=save_dir)
+    if info.get("quant_repo"):
+        print(f"(published reference artifact: {info['quant_repo']})")
+
+
+if __name__ == "__main__":
+    main()

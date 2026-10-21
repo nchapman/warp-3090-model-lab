@@ -1,0 +1,9 @@
+{"ts": "2026-10-16T20:52:04.499Z", "type": "RUN_START", "name": "ladder-champ-pod-t0-r2", "dir": "/root/warp-3090-quant-lab/runs/ladder-champ-pod-t0-r2.20261016T205204Z.17112"}
+{"ts": "2026-10-16T20:52:04.560Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-16T20:52:04.637Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_champ-pod-t0-r2"}
+{"ts": "2026-10-16T20:52:04.784Z", "type": "SERVER_LAUNCH", "pid": "17131", "log": "/root/warp-3090-quant-lab/vllm_eval_champ-pod-t0-r2.log"}
+{"ts": "2026-10-16T20:55:46.116Z", "type": "SERVER_HEALTHY", "elapsed": "222s", "port": "8151"}
+{"ts": "2026-10-16T20:55:46.159Z", "type": "PROMPTS_START", "n": "20 temp=0"}
+{"ts": "2026-10-16T20:55:51.385Z", "type": "PROMPTS_DONE"}
+{"ts": "2026-10-16T20:56:18.573Z", "type": "SERVER_STOPPED", "pid": "17131", "signal": "TERM"}
+{"ts": "2026-10-16T20:56:18.622Z", "type": "RUN_DONE", "status": "ok", "tau": "champ-pod-t0-r2 4.090 accepted=3800"}

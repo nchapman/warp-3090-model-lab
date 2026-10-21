@@ -10,10 +10,36 @@ the same commit. A doctrine file that lags the repo is worse than none —
 "no multi-domain eval exists" survived three days after `bench_subsets.sh`
 shipped, and misinformed a planning session.
 
+## Repo layout (per-activity monorepo, 2026-10-20)
+
+- `quants/` — quant workflow (calib build, quantize, verify, probe,
+  publish, capability battery, model cards). Local quant artifacts are
+  untracked bare root dirs named for what they are (`*-W4A16-GPTQ*`,
+  gitignored) — there is no tracked `quants/` artifact directory.
+- `drafters/` — drafter workflow: slicing, on-policy regen, prep,
+  extraction, ladders/evals, `train.md` recipes, draft_config taps.
+- `finetune/` — managed/external fine-tuning workflows (scaffold; charter
+  in its README).
+- `lib/` — shared run plumbing: `runlib.sh` (bash), `lablog.py` (python).
+- `scripts/` — pod-side and repo ops (pod_prep, podsh, tail_run, upload).
+- `experiments/` — closed campaigns, code+docs+records frozen together:
+  `experiments/quants/` (calib-v2 arm, battery records),
+  `experiments/drafters/` (draft-OPD, dflash2 research, overnight
+  campaign). Records and writeups there are frozen receipts — they may
+  cite pre-reorg paths (`drafter/`, `quant/`, the old root `quants/`
+  artifact dir); read them as historical.
+- Untracked conventions (gitignored): `runs/` `results/` `slices/`
+  `states/` `ds_*/` `draft_*/` `eval_*/` `data-raw/` `smoke/` and root
+  `*-W4A16-GPTQ*` dirs. `results/results.csv` is live eval output;
+  anything worth keeping graduates to `experiments/*/records/`.
+- Venv and requirements names keep their historical identities
+  (`.venv-quant`, `.venv-dflash`, `requirements-drafter.txt`) — renaming
+  forces rebuild churn on every pod for zero information.
+
 ## Runs and processes
 
 - Every eval/server/training run goes through `lib/runlib.sh` (bash) or
-  `quant/lablog.py` (python) — no exceptions. If a script runs anything
+  `lib/lablog.py` (python) — no exceptions. If a script runs anything
   GPU-bound or longer than a minute without `run_init`/events, it's wrong.
 - Inspect any run with `bash scripts/tail_run.sh [prefix]` — never go hunting
   for log paths manually.
@@ -29,9 +55,9 @@ shipped, and misinformed a planning session.
 
 ## Measuring τ (acceptance)
 
-- `TEMP` env on `drafter/eval_ladder.sh` / `eval_mtp.sh` selects sampling
+- `TEMP` env on `drafters/eval_ladder.sh` / `eval_mtp.sh` selects sampling
   temperature (default 1.0). For checkpoint selection, use
-  `drafter/sweep_epochs.sh` — one command, full campaign. Three regimes,
+  `drafters/sweep_epochs.sh` — one command, full campaign. Three regimes,
   three purposes:
   - **t=0 (greedy)** — the low-noise instrument (repeat spread ~0.05). Use to
     sanity-check stability, not to pick shipping checkpoints.
@@ -92,7 +118,7 @@ SPEAK TOKENS, NOT CHARACTERS — never report text lengths in chars
 (they read as token counts and mislead; the 2400-char ≈ 640-tok proxy
 confusion is the canonical example). Nominal row-tokens ≠ unique ≠
 supervised: rung 1's "10M" was 7.5M unique (25% prefix dup) = **5.2M
-supervised** (1.93× exchange). `drafter/data_audit.py` measures all of
+supervised** (1.93× exchange). `drafters/data_audit.py` measures all of
 these — run it, never guess.
 
 **Corpus** (`data/context_pool.jsonl`, sha-pinned; read-only copy of the
@@ -114,16 +140,16 @@ corpus is built fresh per the campaign spec below.
   supervision). Code ≈ 6% of context content (measured).
 - Length: mean 2,115 / median 1,676 / p90 4,588 / p99 6,207 tokens —
   **uncapped**; DFlash paper spec caps at 3072, DSpark reference ≤1024.
-- Shape tooling: `drafter/reshape_tokens.py` (prefix/merged/first/short),
+- Shape tooling: `drafters/reshape_tokens.py` (prefix/merged/first/short),
   `prep_dataset.py --loss-mode all|last --max-tokens N` (drop cap).
 - Full corpus narrative: `docs/data_scaling.md`.
 
 **Eval instruments** (two exist; long-context: none yet — don't claim
 deployment relevance on long inputs without building one):
-- `data/ladder-20.jsonl` + `drafter/eval_ladder.sh` — GENERAL CHAT ONLY;
+- `data/ladder-20.jsonl` + `drafters/eval_ladder.sh` — GENERAL CHAT ONLY;
   the selection instrument (t=0.7, n≥4). Every ladder-quoted τ (incl.
   champion 3.79) is general-chat τ.
-- `drafter/bench_subsets.sh` — multi-domain profile: RedHatAI
+- `drafters/bench_subsets.sh` — multi-domain profile: RedHatAI
   speculator_benchmarks, 9 subsets / 924 prompts, revision-pinned
   `2ae86af` (repins are logged, never silent), t=0 default, interval-
   weighted τ from vLLM logs; `TEMP`/`SUBSET_N`/`SPEC`/`FLOOR_PER_PROMPT`
@@ -136,7 +162,7 @@ deployment relevance on long inputs without building one):
 **Quant-damage instruments** (battery + rollout ruler; the deployment
 side, distinct from the τ instruments above). The rollout ruler:
 `data/traj-v1.jsonl` (301 rows, agentic 100 / math 60 / chat+long 80 /
-IF 25 / Belebele 36) read by `quant/traj_probe.py` — paired greedy 32-
+IF 25 / Belebele 36) read by `quants/traj_probe.py` — paired greedy 32-
 token rollouts; report agree@1, exact@32, per-domain (the compounding
 regime; Unsloth Divergence-300-style). Teacher-forced KL (probe.py) is a
 different instrument — never average the two, compare per-domain
@@ -174,7 +200,7 @@ itself is damage). 8k cap ruled out (ifeval >54% would truncate).
   numbers are regime diagnostics, never deployment claims. Pre-10-20
   runs carry no protocol stamp — verify mode from run logs before
   pairing. Authoritative standing of every historical battery claim:
-  `results/battery-protocol-audit-20261020.md`.
+  `experiments/quants/records/battery-protocol-audit-20261020.md`.
 - **Battery noise floor (measured 2026-10-19, two independent base runs
 at identical config):** ifeval strict is format-robust and stable
 (0.2pt base-vs-base) — the trustworthy discriminator. gpqa
@@ -230,7 +256,7 @@ for dflash2/dspark — BUT `--dflash-decay-gamma` defaults to **4.0**, so the
 documented γ=7 static recipe still requires pinning the flag. All our
 scripts pin both explicitly (champion lineage = fixed-exp-decay γ7; dpace
 additionally requires `--loss-fn=ce`). Draft-OPD trainer patch is inert
-without opd_ columns — default SFT path unaffected (`docs/draft_opd.md`).
+without opd_ columns — default SFT path unaffected (`experiments/drafters/draft_opd.md`).
 
 **Trainer behavior.** Multipack sampler re-shuffles per epoch (seed+epoch)
 → epoch step-counts vary (rung 1: 1,310–1,850+); `step_ms` excludes
@@ -280,10 +306,10 @@ authored finals: qwen/qwen3.8-flash via regen_calib_finals.py). Battery-gate
 verdict (n=541, chat16k-think, McNemar p=0.57): the healthy-quant family
 (champion / v1rebuild / qwenfinals) is FLAT — same-box traj ruler confirms
 (RESULTS.md 2026-10-20b). Calib-authorship swaps are probe-only screens.
-Quant recipe: `quant/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
+Quant recipe: `quants/run_quant.sh <key>` (W4A16 GPTQ, cascade-v1 calib).
 **Release metadata (2026-10-20, user decision):** every quant ships the
 CUSTOM release chat template (froggeric v22.5, byte-pinned as
-quant/release_chat_template.jinja, sha-guarded in quantize.py, standalone-file
+quants/release_chat_template.jinja, sha-guarded in quantize.py, standalone-file
 mechanism identical to the published champion) + the SERVING_PARAMS
 generation_config stamp. Stock template does NOT ship. Measured 0.5pt-neutral
 on ifeval (n=541) — consistency with the published family wins.
@@ -294,7 +320,7 @@ IF 5.2 / conv_agent 3.5 / terminal 2.0 / swe 0.6 (verified against the frozen
 file to the row, 2026-10-17). Original builder = build_cascade_slices.py in
 ~/Code/llm-compressor (build_calib_mix.py is the earlier ncblend 9-bucket
 builder — different artifact; that conflation caused the old "provenance gap"
-note). RECONSTRUCTION VERIFIED 2026-10-17: `quant/build_calib.py --mode
+note). RECONSTRUCTION VERIFIED 2026-10-17: `quants/build_calib.py --mode
 v1-repro` rebuilds the frozen calib AND its day-0 probe companion byte-exact
 from data-raw/cascade/ (gitignored raw pool, 21 shards first/mid/last per
 subset, hash-pinned in data/MANIFEST.raw-pools.sha256); the same mode is the
@@ -307,7 +333,7 @@ perfectblend 0.1432. All quants share this lineage.**
 
 **Regen doctrine.** Contexts are the shared invariant; every target model
 regenerates finals ON-POLICY with its deployed quant:
-`drafter/regen_pool.sh <model-key>`. Generator config follows the
+`drafters/regen_pool.sh <model-key>`. Generator config follows the
 reference idiom — **t 0.7 / top_p 0.95, NO top_k**, stated length cap,
 one conv per sample, minimum-valid-tokens filter ON. CAUTION:
 `regen_pool.sh` as committed still stamps `models.py SERVING_PARAMS`

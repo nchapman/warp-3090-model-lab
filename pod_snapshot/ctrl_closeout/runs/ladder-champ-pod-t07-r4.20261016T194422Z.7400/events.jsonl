@@ -1,0 +1,5 @@
+{"ts": "2026-10-16T19:44:22.706Z", "type": "RUN_START", "name": "ladder-champ-pod-t07-r4", "dir": "/root/warp-3090-quant-lab/runs/ladder-champ-pod-t07-r4.20261016T194422Z.7400"}
+{"ts": "2026-10-16T19:44:22.766Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-16T19:44:22.838Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_champ-pod-t07-r4"}
+{"ts": "2026-10-16T19:44:22.979Z", "type": "SERVER_LAUNCH", "pid": "7419", "log": "/root/warp-3090-quant-lab/vllm_eval_champ-pod-t07-r4.log"}
+{"ts": "2026-10-16T19:46:53.941Z", "type": "RUN_FAILED", "status": "fail unexpected_exit=143"}

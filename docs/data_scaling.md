@@ -42,7 +42,7 @@ data-kind. The rung-1 *observations* stand
 1.04–1.05 across all 6 epochs) — the conclusion doesn't.
 
 Recovery: per-model regen is now a standing process
-(`drafter/regen_pool.sh`; SERVING_PARAMS from `models.py`; see
+(`drafters/regen_pool.sh`; SERVING_PARAMS from `models.py`; see
 AGENTS.md). The 0.8B pass is running; the 4B pass (corpus recovery)
 reruns when 4B work resumes — the 4B ladder must re-measure rung 1 on
 regen-fixed data before r130 is decided.
@@ -50,7 +50,7 @@ regen-fixed data before r130 is decided.
 ## Currency ledger: one unit for "amount of data"
 
 Canonical: **unique supervised tokens** (loss_mask=1, once per conv);
-conversations as the diversity co-unit (`drafter/data_audit.py`).
+conversations as the diversity co-unit (`drafters/data_audit.py`).
 Rung 1 exact: 10,001,156 nominal → 7,498,489 unique (25% prefix dup) →
 **5,190,561 supervised** (1.93× exchange). Never speak in characters.
 

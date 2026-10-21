@@ -49,14 +49,14 @@ stop_server; sleep 8
 log_event STAGE_DONE "n=1 regen rows=100"
 
 echo "[2/4] build 100-row dataset (assistant-masked) + extract (6-tap fp8)"
-"$VENV/python" drafter/prep_dataset.py --jsonl "$OUT/regen.jsonl" --out "$OUT/states" \
+"$VENV/python" drafters/prep_dataset.py --jsonl "$OUT/regen.jsonl" --out "$OUT/states" \
   --quant "$QUANT" --limit 100 | tail -1
-CUDA_VISIBLE_DEVICES=0 "$VENV/python" drafter/extract_states.py --dataset "$OUT/states" \
+CUDA_VISIBLE_DEVICES=0 "$VENV/python" drafters/extract_states.py --dataset "$OUT/states" \
   --verifier "$QUANT" --out "$OUT/states" --model 4b --limit 100 --parity 20 2>&1 | tail -3
 log_event STAGE_DONE "n=2 dataset+extract"
 
 echo "[3/4] draft bootstrap + 10 train steps + val"
-"$VENV/python" drafter/bootstrap_draft.py --model 4b --quant "$QUANT" --out "$OUT/draft_init"
+"$VENV/python" drafters/bootstrap_draft.py --model 4b --quant "$QUANT" --out "$OUT/draft_init"
 CUDA_VISIBLE_DEVICES=0 "$VENV/speculators" train --speculator-type dflash2 \
   --draft-attn-impl sdpa --from-pretrained "$OUT/draft_init" \
   --verifier-name-or-path "$QUANT" --data-path "$OUT/states" \

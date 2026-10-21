@@ -1,0 +1,9 @@
+{"ts": "2026-10-17T06:59:09.104Z", "type": "RUN_START", "name": "ladder-opt4b_checkpoint_best_r2", "dir": "/root/warp-3090-quant-lab/runs/ladder-opt4b_checkpoint_best_r2.20261017T065909Z.40049"}
+{"ts": "2026-10-17T06:59:09.146Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-17T06:59:09.222Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_opt4b_checkpoint_best_r2"}
+{"ts": "2026-10-17T06:59:09.355Z", "type": "SERVER_LAUNCH", "pid": "40068", "log": "/root/warp-3090-quant-lab/vllm_eval_opt4b_checkpoint_best_r2.log"}
+{"ts": "2026-10-17T07:03:05.755Z", "type": "SERVER_HEALTHY", "elapsed": "236s", "port": "8151"}
+{"ts": "2026-10-17T07:03:05.800Z", "type": "PROMPTS_START", "n": "20 temp=0.7"}
+{"ts": "2026-10-17T07:03:30.320Z", "type": "PROMPTS_DONE"}
+{"ts": "2026-10-17T07:03:57.518Z", "type": "SERVER_STOPPED", "pid": "40068", "signal": "TERM"}
+{"ts": "2026-10-17T07:03:57.582Z", "type": "RUN_DONE", "status": "ok", "tau": "opt4b_checkpoint_best_r2 1.372 accepted=1310"}

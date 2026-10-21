@@ -1,0 +1,9 @@
+{"ts": "2026-10-17T15:37:09.479Z", "type": "RUN_START", "name": "bench-opt4b_ctrl", "dir": "/root/warp-3090-quant-lab/runs/bench-opt4b_ctrl.20261017T153709Z.83237"}
+{"ts": "2026-10-17T15:37:10.179Z", "type": "DATASET_PIN", "revision": "2ae86affa2cb97a972b7fc681dd51c04fbff083e subsets=9 sub_n=0"}
+{"ts": "2026-10-17T15:37:10.347Z", "type": "SERVER_LAUNCH", "pid": "83255", "log": "/root/warp-3090-quant-lab/runs/bench-opt4b_ctrl.20261017T153709Z.83237/server.log"}
+{"ts": "2026-10-17T15:41:01.866Z", "type": "SERVER_HEALTHY", "elapsed": "231s", "port": "8152"}
+{"ts": "2026-10-17T15:41:01.948Z", "type": "SUBSET_START", "subset": "qa file=/root/.cache/huggingface/hub/datasets--RedHatAI--speculator_benchmarks/snapshots/2ae86affa2cb97a972b7fc681dd51c04fbff083e/qa.jsonl"}
+{"ts": "2026-10-17T15:41:52.590Z", "type": "SUBSET_DONE", "subset": "qa 1.233 accepted=3777"}
+{"ts": "2026-10-17T15:41:52.662Z", "type": "SUBSET_START", "subset": "HumanEval file=/root/.cache/huggingface/hub/datasets--RedHatAI--speculator_benchmarks/snapshots/2ae86affa2cb97a972b7fc681dd51c04fbff083e/HumanEval.jsonl"}
+{"ts": "2026-10-17T15:43:18.650Z", "type": "SERVER_STOPPED", "pid": "83255", "signal": "TERM"}
+{"ts": "2026-10-17T15:43:18.694Z", "type": "RUN_FAILED", "status": "fail", "stage": "metric subset=HumanEval"}

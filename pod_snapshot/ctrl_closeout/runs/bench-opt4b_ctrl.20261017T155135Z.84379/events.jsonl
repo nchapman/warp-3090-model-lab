@@ -1,0 +1,15 @@
+{"ts": "2026-10-17T15:51:35.239Z", "type": "RUN_START", "name": "bench-opt4b_ctrl", "dir": "/root/warp-3090-quant-lab/runs/bench-opt4b_ctrl.20261017T155135Z.84379"}
+{"ts": "2026-10-17T15:51:35.924Z", "type": "DATASET_PIN", "revision": "2ae86affa2cb97a972b7fc681dd51c04fbff083e subsets=9 sub_n=0"}
+{"ts": "2026-10-17T15:51:36.091Z", "type": "SERVER_LAUNCH", "pid": "84397", "log": "/root/warp-3090-quant-lab/runs/bench-opt4b_ctrl.20261017T155135Z.84379/server.log"}
+{"ts": "2026-10-17T15:55:37.687Z", "type": "SERVER_HEALTHY", "elapsed": "241s", "port": "8152"}
+{"ts": "2026-10-17T15:55:37.760Z", "type": "SUBSET_START", "subset": "qa file=/root/.cache/huggingface/hub/datasets--RedHatAI--speculator_benchmarks/snapshots/2ae86affa2cb97a972b7fc681dd51c04fbff083e/qa.jsonl"}
+{"ts": "2026-10-17T15:56:29.487Z", "type": "SUBSET_DONE", "subset": "qa 1.227 accepted=3729"}
+{"ts": "2026-10-17T15:56:29.553Z", "type": "SUBSET_START", "subset": "HumanEval file=/root/.cache/huggingface/hub/datasets--RedHatAI--speculator_benchmarks/snapshots/2ae86affa2cb97a972b7fc681dd51c04fbff083e/HumanEval.jsonl"}
+{"ts": "2026-10-17T15:57:58.309Z", "type": "SUBSET_DONE", "subset": "HumanEval 1.070 accepted=2631"}
+{"ts": "2026-10-17T15:57:58.374Z", "type": "SUBSET_START", "subset": "math_reasoning file=/root/.cache/huggingface/hub/datasets--RedHatAI--speculator_benchmarks/snapshots/2ae86affa2cb97a972b7fc681dd51c04fbff083e/math_reasoning.jsonl"}
+{"ts": "2026-10-17T15:58:48.257Z", "type": "SUBSET_DONE", "subset": "math_reasoning 1.282 accepted=4381"}
+{"ts": "2026-10-17T15:58:48.323Z", "type": "SUBSET_START", "subset": "tool_call file=/root/.cache/huggingface/hub/datasets--RedHatAI--speculator_benchmarks/snapshots/2ae86affa2cb97a972b7fc681dd51c04fbff083e/tool_call.jsonl"}
+{"ts": "2026-10-17T16:00:21.517Z", "type": "SUBSET_DONE", "subset": "tool_call 1.189 accepted=7904"}
+{"ts": "2026-10-17T16:00:21.584Z", "type": "SUBSET_START", "subset": "rag file=/root/.cache/huggingface/hub/datasets--RedHatAI--speculator_benchmarks/snapshots/2ae86affa2cb97a972b7fc681dd51c04fbff083e/rag.jsonl"}
+{"ts": "2026-10-17T16:00:45.502Z", "type": "SERVER_STOPPED", "pid": "84397", "signal": "TERM"}
+{"ts": "2026-10-17T16:00:45.562Z", "type": "RUN_FAILED", "status": "fail", "stage": "prompts subset=rag"}

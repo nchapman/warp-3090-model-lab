@@ -1,0 +1,3 @@
+{"ts": "2026-10-16T19:33:57.562Z", "type": "RUN_START", "name": "ladder-champ-pod-t0-r1", "dir": "/root/warp-3090-quant-lab/runs/ladder-champ-pod-t0-r1.20261016T193357Z.6013"}
+{"ts": "2026-10-16T19:33:57.623Z", "type": "PREFLIGHT_FAIL", "path": "nchapman/Qwen3.5-4B-DFlash2/config.json"}
+{"ts": "2026-10-16T19:33:57.670Z", "type": "RUN_FAILED", "status": "fail unexpected_exit=1"}

@@ -7,7 +7,7 @@ GPU idle throughout. Same cost lands again in `prep_dataset.py` — same
 critical path of every campaign.
 
 ## Cause
-`tokenize_with_masks` (drafter/prep_dataset.py) tokenizes each message
+`tokenize_with_masks` (drafters/prep_dataset.py) tokenizes each message
 incrementally: for message i it re-renders the whole prefix via
 `apply_chat_template` and tokenizes the delta — O(n_msgs²) jinja renders
 per conversation, pure Python, serial across rows.

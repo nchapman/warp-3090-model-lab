@@ -1,8 +1,8 @@
 # Measured results (what these scripts should reproduce)
 
 Conventions: weightedKL = blend-weighted mean KL(base‖quant) on the frozen
-probe-v4 ruler (378 rows) via `quant/probe.py`; τ = interval-weighted mean
-acceptance on the 20-prompt held-out ladder (`drafter/eval_ladder.sh`; the
+probe-v4 ruler (378 rows) via `quants/probe.py`; τ = interval-weighted mean
+acceptance on the 20-prompt held-out ladder (`drafters/eval_ladder.sh`; the
 ladder is general-chat only — every τ here is general-chat τ), temp
 1.0 / top_p 0.95 / top_k 20. **Cross-generation caveat: absolute numbers are
 not comparable between 3.5 and 3.8 releases — keep tables per-model.**
@@ -49,7 +49,7 @@ is measurable, and nobody ablates this because nobody measures.
 
 ### Rollout agreement — traj-v1 ruler (2026-10-17, GB10, greedy 32-token)
 
-`quant/traj_probe.py` on the 4B champion vs bf16 base, frozen `traj-v1.jsonl`
+`quants/traj_probe.py` on the 4B champion vs bf16 base, frozen `traj-v1.jsonl`
 (301 rows; both models greedy from identical prompts, rollout = ids through
 first EOS). The compounding-regime instrument: teacher-forced KL scores the
 quant along the *base's* tokens; this measures what happens once the quant's
@@ -87,11 +87,11 @@ confirmed by the harness's invalid-generation-flags warning in the run log.
 > **Methodology caveat (2026-10-19):** ifeval/gpqa numbers in this
 > section were measured under the think-cap confound (completion mode,
 > 4096-token cap, mode flips dominating the delta) — decomposed in
-> `results/battery-think-cap-confound-20261019.md`.
+> `experiments/quants/records/battery-think-cap-confound-20261019.md`.
 > **FINAL STANDING (2026-10-20):** numbers below are REGIME measurements
 > (comp-4096), never deployment claims. Deployment-mode champion anchors:
 > chat-think −7.6 / nothink −1.7 / paired-complete −3.4. Full claim-by-claim
-> adjudication: `results/battery-protocol-audit-20261020.md` — read that
+> adjudication: `experiments/quants/records/battery-protocol-audit-20261020.md` — read that
 > before quoting anything from this section.
 
 > Provenance corrected 2026-10-18: run logs carry `/root/.cache/huggingface`
@@ -100,7 +100,7 @@ confirmed by the harness's invalid-generation-flags warning in the run log.
 > there vs ~6.5 h/side on GB10 (bandwidth-starved, 13.6 s/prompt measured
 > 2026-10-18) — capability batteries are pod jobs.
 
-`quant/capability_battery.sh battery-champion` — 4B champion quant
+`quants/capability_battery.sh battery-champion` — 4B champion quant
 (nchapman/Qwen3.5-4B-W4A16-GPTQ) vs bf16 base (Qwen/Qwen3.5-4B), both
 served via vLLM, lm-eval `--gen_kwargs temperature=0`, paired per-doc
 bootstrap CI, cliff threshold 5pt. THINK_STRIP patch applied (strips think
@@ -216,7 +216,7 @@ Conclusions:
 
 ## Confirmed category profile (2026-10-14, RedHatAI speculator_benchmarks, GB10)
 
-`drafter/bench_subsets.sh` (dataset pin 2ae86af, temp 0, n=2 draws per
+`drafters/bench_subsets.sh` (dataset pin 2ae86af, temp 0, n=2 draws per
 config, 924 prompts, interval-weighted τ from vLLM acceptance logs):
 
 | subset | MTP k=3 | DFlash2 (shipped) | Δ |
@@ -240,14 +240,14 @@ code, rag.
 
 ## Pipeline reproducibility confirmation (2026-10-14)
 
-`quant/probe.py` re-runs against the published Hub quants on frozen
+`quants/probe.py` re-runs against the published Hub quants on frozen
 `probe-v4` reproduce the published weightedKL **exactly**: 4b 0.1087, 9b
 0.0889 (dppl 3.35% / 3.23%). The 27b probe OOMs on GB10 (bf16 base + quant
 will not co-reside in 128GB) — its 0.1264 stands as measured at build time;
 re-confirm on a pod when convenient. (GB10 has 121 GiB UNIFIED memory — see
 AGENTS.md for the vLLM gpu-mem-util rule.)
 
-Full narrative: `docs/history/dflash2_research.md`, `docs/history/calib_v2_plan.md`.
+Full narrative: `experiments/drafters/dflash2_research.md`, `experiments/quants/calib_v2_plan.md`.
 
 ## 0.8B DFlash2 smoke (2026-10-16, GB10) — flow verified, scale floor mapped
 
@@ -281,7 +281,7 @@ used as the shared floor bar for the 0.8B testbed — not 0.8B-native.)
   through the patched trainer with opd metrics in val logs; standard loss
   fully masked at opd positions). Boundary instrument cross-check: mean
   accepted+1 **1.100** vs ladder τ 1.081 same checkpoint. See
-  `docs/draft_opd.md` for semantics + caveats.
+  `experiments/drafters/draft_opd.md` for semantics + caveats.
 - A 15K-conv A/B (≈17M supervised) was started and then killed: superseded
   by the full-scale 0.8B round on the Blackwell pod (RTX PRO 6000, same
   Blackwell family as GB10).
@@ -330,7 +330,7 @@ operator after 4/9 subsets — profiling a dead drafter had no decision
 value. Partials: qa 1.233, tool_call 1.189, HumanEval ~16
 accepted-tokens/prompt (an order of magnitude below healthy drafters; run 1
 tripped the plausible-floor gate that was calibrated for τ≥3 drafters —
-`FLOOR_PER_PROMPT` env added to `drafter/bench_subsets.sh`, default 25).
+`FLOOR_PER_PROMPT` env added to `drafters/bench_subsets.sh`, default 25).
 
 ### Verdict — no ship; failure isolated to assembly-side deviations from the published idiom
 
@@ -367,7 +367,7 @@ ledger + campaign logs (`PULL_MANIFEST.sha256`, 187/187 verified).
 
 ### Pipeline facts (measured)
 
-Corpus (`drafter/data_audit.py`): 130,460 rows, **134.8M supervised /
+Corpus (`drafters/data_audit.py`): 130,460 rows, **134.8M supervised /
 197.5M total tokens**; finals regenerated on-policy by the deployed
 nchapman/Qwen3.5-4B-W4A16-GPTQ at serving params (t 0.7 / top_p 0.95 /
 top_k 20); SFT split 97% / OPD holdout 3%. B200: ~111 min/epoch at 197.5M
@@ -416,7 +416,7 @@ GDN in_proj as ONE fused [fused_N, K] tensor; fused_N = 3168 not div-64
 → llmcompressor group axis misaligned → per-group Hessian inversion
 exploded (early layers dominated; conv_agent dppl +1.1%).** Fix =
 `_gptq_ignore`-style module ignore for fused GDN in_proj in
-quant/quantize.py build_recipe, letting the GDN keepouts cover it.
+quants/quantize.py build_recipe, letting the GDN keepouts cover it.
 Both post-fix runs receipt `assert_packed_div64: OK` and the quantized
 state_dict is per-group verified. Added `assert_preflight_div64` guard
 to quantize.py main() (logs `PREFLIGHT_DIV64_OK`; mock-tested both
@@ -496,7 +496,7 @@ What GPTQ actually sees (4096-token window, 120-row sample, tokens):
 > "Probe wins do not carry" is WEAKENED to untested: its selfgen
 > ifeval cells were era-1 and were never rerun in deployment mode.
 > Numbers below stand as comp-4096 regime measurements only.
-> Master audit: `results/battery-protocol-audit-20261020.md`.
+> Master audit: `experiments/quants/records/battery-protocol-audit-20261020.md`.
 
 Same rig as the champion battery (humaneval_plus, mbpp_plus, ifeval,
 minerva_math500, gpqa_diamond; full n; think-strip; lm-eval 0.4.13;
@@ -590,7 +590,7 @@ battery-grade vLLM serving and llama.cpp sweeps serialize on this box
 
 ## Same-box probe pass + attnbf16 precision arm (2026-10-19, H200 yav18d8q81klrr)
 
-Full table, per-domain rows, and receipts: `results/probe-h200-20261019.md`
+Full table, per-domain rows, and receipts: `experiments/quants/records/probe-h200-20261019.md`
 (row dumps `runs/probe_rows_h200-*.jsonl`). Headlines (current artifacts,
 one box, base NLL 1.3945 every run):
 
@@ -626,7 +626,7 @@ one box, base NLL 1.3945 every run):
   runs. **RETRACTED (2026-10-20):** the −6pt attribution was a
   cross-protocol artifact, not exclusion cost — matched deployment-mode
   arms exonerated the exclusion (see 10-20 verdict below and
-  `results/battery-protocol-audit-20261020.md`); **Probe optimism is NOT
+  `experiments/quants/records/battery-protocol-audit-20261020.md`); **Probe optimism is NOT
   battery evidence** — but note the 10-18 "divergence" citation (qf:
   best qNLL, worst ifeval) was an era-1 completion cell and is UNTESTED
   in deployment mode (selfgen battery never ran); the doctrine stands

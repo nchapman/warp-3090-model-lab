@@ -1,0 +1,6 @@
+{"ts": "2026-10-17T14:37:26.473Z", "type": "RUN_START", "name": "ladder-opt4b_CTRL_epoch2_end_r1", "dir": "/root/warp-3090-quant-lab/runs/ladder-opt4b_CTRL_epoch2_end_r1.20261017T143726Z.77844"}
+{"ts": "2026-10-17T14:37:26.531Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-17T14:37:26.679Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_opt4b_CTRL_epoch2_end_r1"}
+{"ts": "2026-10-17T14:37:26.791Z", "type": "SERVER_LAUNCH", "pid": "77863", "log": "/root/warp-3090-quant-lab/vllm_eval_opt4b_CTRL_epoch2_end_r1.log"}
+{"ts": "2026-10-17T14:43:28.949Z", "type": "SERVER_STUCK", "log_idle": "189s", "gpu_util": "0pct", "waited": "362s"}
+{"ts": "2026-10-17T14:43:29.184Z", "type": "RUN_FAILED", "status": "fail", "stage": "health"}

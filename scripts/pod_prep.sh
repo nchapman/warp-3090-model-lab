@@ -49,8 +49,8 @@ stage() { printf '\n== %s (%s)\n' "$1" "$(date +%H:%M:%S)"; }
 # payload ships via `bash pod.sh push`, NOT via pod_prep sync; the verify
 # stage below warns when they are missing.
 EXCLUDES=(.venv-* runs .git __pycache__ .pi
-          .pytest_cache .mypy_cache smoke 'eval_*' 'Qwen3.5-*-GPTQ*'
-          '*.pyc' .DS_Store quants data-raw slices)
+          .pytest_cache .mypy_cache smoke 'eval_*' '*-W4A16-GPTQ*'
+          '*.pyc' .DS_Store data-raw slices)
 RSYNC_EXCLUDES=()
 for x in "${EXCLUDES[@]}"; do RSYNC_EXCLUDES+=(--exclude "$x"); done
 

@@ -1,0 +1,10 @@
+subset,tau,accepted
+qa,2.940,13209
+HumanEval,3.339,28667
+math_reasoning,3.508,14324
+tool_call,3.240,34615
+rag,3.339,14016
+question,3.122,13573
+writing,3.109,13541
+summarization,3.159,13680
+translation,2.949,13228

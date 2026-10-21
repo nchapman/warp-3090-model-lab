@@ -33,7 +33,7 @@ MODELS = {
         # drafter taps: N aux + final layer (states are always N+1 taps!)
         # v4 spread rule mirrored for 24 layers: even interior + final
         "taps_v4": [2, 8, 12, 16, 20, 24],       # 5 aux + final
-        "draft_config": "drafter/draft_config_0b8.json",
+        "draft_config": "drafters/draft_config_0b8.json",
         "quant_repo": "Qwen3.5-0.8B-W4A16-GPTQ",  # local dir at repo root
                                                           # (no slash = local;
                                                           #  hub ids carry user/)
@@ -53,7 +53,7 @@ MODELS = {
         # drafter taps: N aux + final layer (states are always N+1 taps!)
         "taps_v1": [2, 16, 29, 32],               # 3 aux, block-8 era
         "taps_v4": [2, 10, 17, 24, 29, 32],       # 5 aux + final, champion era
-        "draft_config": "drafter/draft_config_4b.json",
+        "draft_config": "drafters/draft_config_4b.json",
         # published artifacts (live on HF)
         "quant_repo": "nchapman/Qwen3.5-4B-W4A16-GPTQ",
         # validated results (see RESULTS.md; blank = untested)
@@ -73,7 +73,7 @@ MODELS = {
         "mask_token_id": 248077,
         "taps_v1": [2, 16, 29, 32],               # same depth as 4B
         "taps_v4": [2, 10, 17, 24, 29, 32],
-        "draft_config": "drafter/draft_config_9b.json",
+        "draft_config": "drafters/draft_config_9b.json",
         "quant_repo": "nchapman/Qwen3.5-9B-W4A16-GPTQ",
         "quant_weightedkl": 0.0889,
         "drafter_ladder": None,    # init config built, never trained
@@ -94,7 +94,7 @@ MODELS = {
         # [5,19,33,47,61] (block 8). Treat 27B drafter as experimental.
         "taps_v1": [2, 32, 61, 64],
         "taps_v4": [2, 17, 32, 47, 61, 64],
-        "draft_config": "drafter/draft_config_27b.json",
+        "draft_config": "drafters/draft_config_27b.json",
         "quant_repo": "nchapman/Qwen3.8-27B-W4A16-GPTQ",
         "quant_weightedkl": 0.1264,   # cross-gen: not comparable to 3.5 numbers
         "drafter_ladder": None,       # NO-GO decision (budget); premium ref 2.959

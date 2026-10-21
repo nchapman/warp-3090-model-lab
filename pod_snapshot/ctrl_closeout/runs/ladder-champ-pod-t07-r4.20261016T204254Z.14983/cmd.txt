@@ -1,0 +1,3 @@
+# utc: 2026-10-16T20:42:54Z
+# host: eb8c338f8f08
+# cmd: eval_ladder.sh /root/.cache/huggingface/hub/models--nchapman--Qwen3.5-4B-DFlash2/snapshots/8d8bb62873a4fe6165e644163e9ff76e06ab78ba champ-pod-t07-r4 15 8151

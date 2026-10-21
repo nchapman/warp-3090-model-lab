@@ -1,0 +1,9 @@
+{"ts": "2026-10-17T13:08:28.895Z", "type": "RUN_START", "name": "ladder-opt4b_INIT_r1", "dir": "/root/warp-3090-quant-lab/runs/ladder-opt4b_INIT_r1.20261017T130828Z.71703"}
+{"ts": "2026-10-17T13:08:28.952Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-17T13:08:29.028Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_opt4b_INIT_r1"}
+{"ts": "2026-10-17T13:08:29.162Z", "type": "SERVER_LAUNCH", "pid": "71722", "log": "/root/warp-3090-quant-lab/vllm_eval_opt4b_INIT_r1.log"}
+{"ts": "2026-10-17T13:12:20.544Z", "type": "SERVER_HEALTHY", "elapsed": "231s", "port": "8152"}
+{"ts": "2026-10-17T13:12:20.603Z", "type": "PROMPTS_START", "n": "20 temp=0.7"}
+{"ts": "2026-10-17T13:12:48.493Z", "type": "PROMPTS_DONE"}
+{"ts": "2026-10-17T13:13:20.694Z", "type": "SERVER_STOPPED", "pid": "71722", "signal": "TERM"}
+{"ts": "2026-10-17T13:13:20.760Z", "type": "RUN_FAILED", "status": "fail", "stage": "metric"}

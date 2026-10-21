@@ -1,0 +1,5 @@
+{"ts": "2026-10-17T06:48:00.193Z", "type": "RUN_START", "name": "ladder-opt4b_ctrl0_r2", "dir": "/root/warp-3090-quant-lab/runs/ladder-opt4b_ctrl0_r2.20261017T064800Z.36061"}
+{"ts": "2026-10-17T06:48:00.250Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-17T06:48:00.326Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_opt4b_ctrl0_r2"}
+{"ts": "2026-10-17T06:48:00.442Z", "type": "SERVER_PORT_BUSY", "port": "8151"}
+{"ts": "2026-10-17T06:48:00.501Z", "type": "RUN_FAILED", "status": "fail", "stage": "server-launch"}

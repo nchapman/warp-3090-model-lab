@@ -4,42 +4,46 @@ __pycache__/
 .venv*
 .pi/
 
-# run outputs
-runs/
-results/
-slices/
-states/
-hidden_states/
-ds_*/
-draft_init*/
-draft_v*/
-draft_reg/
-eval_*
+# run outputs (root-level conventions; tools write these at repo root)
+/runs/
+/results/
+/slices/
+/states/
+/hidden_states/
+/ds_*/
+/draft_init*/
+/draft_v*/
+/draft_reg/
+/eval_*
 *.log
 
 # raw data pools (downloaded by quant/build_calib.py, never in git)
-data-raw/
+/data-raw/
 
 # model weights
-# model weights (bare pattern: symlinks into the main checkout are not
-# directories, the trailing-slash form misses them)
+# (bare pattern: symlinks into the main checkout are not directories,
+# the trailing-slash form misses them)
 *.safetensors
 *.bin
 Qwen3*
-quants/
+# local quant artifacts: bare root dirs (naming rule — quants are named
+# for what they are, e.g. Qwen3.5-4B-W4A16-GPTQ, *-W4A16-GPTQ-cascade)
+/*-W4A16-GPTQ*/
 data/regen_*.jsonl
-ladder/context_pool
-ladder/
-data/context_pool.jsonl
-data/regen_*.jsonl
-ladder/
 
 # drafter smoke/OPD workspaces (disposable, regenerated from banked pool)
-smoke/
+/smoke/
 data/smoke*
 data/opd_dryrun/
 data/opd_boundaries/
 data/opd_replay_*/
+
+# pulled regen inputs/outputs stay disk-only (pinned via MANIFEST when frozen)
+data/context_pool.jsonl
+data/regen_*.jsonl
+
+# data-ladder workspace
+/ladder/
 
 # 528MB frozen pool: sha-pinned in data/MANIFEST.sha256, dual-homed on the HF
 # mirror (nchapman/warp-3090-quant-lab-frozen-data) — restore with a mirror
@@ -48,7 +52,13 @@ data/context_pool.jsonl
 
 # local secrets, never commit
 .env
+
 # pulled campaign evidence: heavy artifacts stay on disk only (shas in PULL_MANIFEST.sha256)
+# (the 2026-10-17 ctrl_closeout receipts were grandfathered into git before this
+# rule; future pulled runs/evals stay disk-only — graduation to
+# experiments/*/records/ is an explicit copy, never git add -A)
+pod_snapshot/**/runs/
+pod_snapshot/evals/
 pod_snapshot/**/model.safetensors
 pod_snapshot/**/optimizer_state_dict.pt
 pod_snapshot/**/0.tar.zst

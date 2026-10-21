@@ -1,0 +1,9 @@
+{"ts": "2026-10-16T20:42:54.563Z", "type": "RUN_START", "name": "ladder-champ-pod-t07-r4", "dir": "/root/warp-3090-quant-lab/runs/ladder-champ-pod-t07-r4.20261016T204254Z.14983"}
+{"ts": "2026-10-16T20:42:54.621Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-16T20:42:54.694Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_champ-pod-t07-r4"}
+{"ts": "2026-10-16T20:42:54.837Z", "type": "SERVER_LAUNCH", "pid": "15002", "log": "/root/warp-3090-quant-lab/vllm_eval_champ-pod-t07-r4.log"}
+{"ts": "2026-10-16T20:46:51.360Z", "type": "SERVER_HEALTHY", "elapsed": "237s", "port": "8151"}
+{"ts": "2026-10-16T20:46:51.419Z", "type": "PROMPTS_START", "n": "20 temp=0.7"}
+{"ts": "2026-10-16T20:47:07.521Z", "type": "PROMPTS_DONE"}
+{"ts": "2026-10-16T20:47:34.727Z", "type": "SERVER_STOPPED", "pid": "15002", "signal": "TERM"}
+{"ts": "2026-10-16T20:47:34.794Z", "type": "RUN_DONE", "status": "ok", "tau": "champ-pod-t07-r4 3.689 accepted=3660"}

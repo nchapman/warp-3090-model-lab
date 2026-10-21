@@ -1,0 +1,2 @@
+{"ts": "2026-10-17T09:20:26.752Z", "type": "RUN_START", "name": "bench-opt4b_final", "dir": "/root/warp-3090-quant-lab/runs/bench-opt4b_final.20261017T092026Z.55220"}
+{"ts": "2026-10-17T09:20:27.190Z", "type": "RUN_FAILED", "status": "fail", "stage": "dataset"}

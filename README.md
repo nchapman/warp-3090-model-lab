@@ -26,7 +26,7 @@ python3 -m venv .venv-dflash  && .venv-dflash/bin/pip install -r requirements-dr
 # + fp8 states (default): after the drafter venv installs, patch speculators in it:
 #   SP=$(./.venv-dflash/bin/python -c 'import speculators,os;print(os.path.dirname(os.path.dirname(speculators.__file__)))') \
 #     && patch -p1 -d "$SP" < patches/speculators_fp8_load_cast.patch
-# + Draft-OPD post-training (optional, inert without opd_ columns; see docs/draft_opd.md):
+# + Draft-OPD post-training (optional, inert without opd_ columns; see experiments/drafters/draft_opd.md):
 #     patch -p1 -d "$SP" < patches/speculators_draft_opd.patch
 ```
 
@@ -38,7 +38,7 @@ python3 -m venv .venv-dflash  && .venv-dflash/bin/pip install -r requirements-dr
 | **RunPod B200/B300** | big rungs — same scripts, faster (`bash pod.sh push && pod.sh run`) |
 | **3090 / Ampere** | deployment target — the quant format is the contract; acceptance is portable, throughput is not |
 
-Why this split is safe (see `docs/history` + `RESULTS.md`): acceptance is a
+Why this split is safe (see `experiments/drafters/` notebooks + `RESULTS.md`): acceptance is a
 distribution property, not a kernel property; W4A16 GPTQ weights are
 deterministic given calibration data and serve identically on sm_86. Never
 quote throughput for warp-3090 claims from Blackwell hardware — measure that
@@ -46,7 +46,7 @@ on a 3090. (Don't lean on cross-machine τ comparisons either — single-draw
 τ noise swamps hardware deltas; the anchor numbers in `RESULTS.md` are all
 GB10.) Attention impl per machine: `simple_flex_attention` on B200,
 `sdpa` on Spark (flex Triton kernels exceed sm_121 shared memory) — see
-`drafter/train.md`.
+`drafters/train.md`.
 
 Workflow: **test locally, then push to a big box.**
 `bash regression.sh` locally → `bash pod.sh push` → `bash pod.sh run '...'` →
@@ -71,15 +71,15 @@ stay "untested" in `RESULTS.md` until someone runs them.
 ## Sequence 1 — reproduce a quant (quant venv; 4B ≈ 24GB, ~2h)
 
 ```bash
-python quant/quantize.py --model 4b          # gptq + cascade-v1 calib, 999x4096 (defaults)
-python quant/probe.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ \
+python quants/quantize.py --model 4b          # gptq + cascade-v1 calib, 999x4096 (defaults)
+python quants/probe.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ \
     --eval_set data/probe-v4.jsonl --tag repro
 # expect weightedKL ≈ 0.1087; also probe data/probe-guard.jsonl (OOD check)
 ```
 
 For 9B/27B: same commands with `--model 9b` / `--model 27b` (27B quant wants
 ~80GB or device offload; 9B probe holds base+quant resident, ~40GB).
-Build new calib/probe sets with `quant/build_calib.py` (raw pool goes in
+Build new calib/probe sets with `quants/build_calib.py` (raw pool goes in
 `data-raw/`, not in git). `--mode v1-repro` reconstructs the frozen
 cascade-v1 calib byte-exact from that pool and self-verifies (see the
 reproducibility contract).
@@ -87,19 +87,19 @@ reproducibility contract).
 ## Sequence 2 — drafter, small scale (drafter venv; Spark or any 24GB+ GPU)
 
 ```bash
-python drafter/slice_convs.py --preset small --quant ./Qwen3.5-4B-W4A16-GPTQ
+python drafters/slice_convs.py --preset small --quant ./Qwen3.5-4B-W4A16-GPTQ
 vllm serve ./Qwen3.5-4B-W4A16-GPTQ --port 8138 &     # the DEPLOYED quant
-python drafter/regen.py slices/s_train.jsonl slices/s_regen.jsonl slices/s_merged.jsonl --model 4b
-python drafter/prep_dataset.py --jsonl slices/s_merged.jsonl --out ds_small --quant ./Qwen3.5-4B-W4A16-GPTQ
-python drafter/extract_states.py --dataset ds_small --verifier ./Qwen3.5-4B-W4A16-GPTQ \
+python drafters/regen.py slices/s_train.jsonl slices/s_regen.jsonl slices/s_merged.jsonl --model 4b
+python drafters/prep_dataset.py --jsonl slices/s_merged.jsonl --out ds_small --quant ./Qwen3.5-4B-W4A16-GPTQ
+python drafters/extract_states.py --dataset ds_small --verifier ./Qwen3.5-4B-W4A16-GPTQ \
     --out ds_small --model 4b --parity 20
-python drafter/bootstrap_draft.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ --out draft_init
-# train command: drafter/train.md (small-scale section; sdpa on Spark)
-bash drafter/eval_ladder.sh draft_small/0 small 15 8151      # expect τ ≈ 2.18
+python drafters/bootstrap_draft.py --model 4b --quant ./Qwen3.5-4B-W4A16-GPTQ --out draft_init
+# train command: drafters/train.md (small-scale section; sdpa on Spark)
+bash drafters/eval_ladder.sh draft_small/0 small 15 8151      # expect τ ≈ 2.18
 ```
 
 Full-corpus regen (any registered model) is one command —
-`drafter/regen_pool.sh <model-key>` serves the deployed quant with
+`drafters/regen_pool.sh <model-key>` serves the deployed quant with
 `models.py SERVING_PARAMS` and regenerates every context's final,
 resume-safe; outputs land in `data/`.
 
@@ -111,10 +111,10 @@ and states must be **N+1 taps** (aux + final; `--model` fills this for you).
 
 Same sequence with `--preset v4` (100k convs → 260M tokens; fp8 6-tap states
 ≈ 3.2TB — disk is the gating resource), then both train arms from
-`drafter/train.md` at checkpoint-freq 1. Expect τ ≈ 3.8 at the serving point
+`drafters/train.md` at checkpoint-freq 1. Expect τ ≈ 3.8 at the serving point
 (temp 0.7) vs native MTP ≈ 2.9 — measure the MTP baseline on your own ladder
-first (`drafter/train.md`); published MTP numbers are harness-specific.
-Checkpoint selection: `bash drafter/sweep_epochs.sh <checkpoints_parent>
+first (`drafters/train.md`); published MTP numbers are harness-specific.
+Checkpoint selection: `bash drafters/sweep_epochs.sh <checkpoints_parent>
 <sweep_name>` — runs the serving-temp ladder (`TEMP=0.7`) across every epoch
 and extra repeats on the top contenders, emitting a ranked table with
 pooled n. τ rises monotonically to end-of-training at 0.7, but the ranking
@@ -148,16 +148,16 @@ walled off (all frozen sets pairwise hash-disjoint; builders enforce it):
 
 | process | uses | notes |
 |---|---|---|
-| quantization (`quant/quantize.py`) | `calib-cascade-v1` only | activations decide GPTQ grouping; no_robots/Belebele never enter — keeps the guard honest |
-| drafter training (`drafter/slice_convs.py` → `regen.py` → …) | cascade pool prompts via `conv-ids` presets | slices hash-banned from every frozen set; `regen.py` rewrites assistant turns with the deployed quant — training data is quant-written completions + quant states, never cascade's original assistant text, never bf16 |
-| evaluation (`quant/probe.py`, `quant/traj_probe.py`, `drafter/eval_ladder.sh`) | `probe-v4` → headline weightedKL; `traj-v1` → rollout agreement (agree@1, exact@32, per-domain — where looping/tool-format drift shows); `probe-guard` → OOD anti-gaming check; `ladder-20` → headline τ + per-epoch checkpoint selection | ladder-20 is hash-banned from training; probe-guard and traj-v1 are consumed by nothing upstream — pure held-out referees |
+| quantization (`quants/quantize.py`) | `calib-cascade-v1` only | activations decide GPTQ grouping; no_robots/Belebele never enter — keeps the guard honest |
+| drafter training (`drafters/slice_convs.py` → `regen.py` → …) | cascade pool prompts via `conv-ids` presets | slices hash-banned from every frozen set; `regen.py` rewrites assistant turns with the deployed quant — training data is quant-written completions + quant states, never cascade's original assistant text, never bf16 |
+| evaluation (`quants/probe.py`, `quants/traj_probe.py`, `drafters/eval_ladder.sh`) | `probe-v4` → headline weightedKL; `traj-v1` → rollout agreement (agree@1, exact@32, per-domain — where looping/tool-format drift shows); `probe-guard` → OOD anti-gaming check; `ladder-20` → headline τ + per-epoch checkpoint selection | ladder-20 is hash-banned from training; probe-guard and traj-v1 are consumed by nothing upstream — pure held-out referees |
 
 One documented exception: ladder-20 prompt texts recur inside calib rows (both
 cascade-derived) — τ compares drafters against the same target model, so the
 overlap can't game it. `regression.sh` regenerates its own smoke dataset and
 never reads `data/`.
 
-**Reproducibility contract.** `quant/build_calib.py` builds *new* sets of each
+**Reproducibility contract.** `quants/build_calib.py` builds *new* sets of each
 calib/probe/guard kind — always hash-disjoint from the frozen ones (freshness
 by design, not regeneration). Every build writes a `<out>.sources.json` sidecar
 pinning each upstream file it read (dataset revision + SHA256), so silent
@@ -237,27 +237,48 @@ unexpected places) are failure modes of unmanaged runs, not of the models.
 - Inspect any run: `bash scripts/tail_run.sh [name-prefix]`.
 
 `lib/runlib.sh` is the bash implementation (sourced by `regression.sh`,
-`drafter/eval_ladder.sh`, `drafter/eval_mtp.sh`); `quant/lablog.py` is the
+`drafters/eval_ladder.sh`, `drafters/eval_mtp.sh`); `lib/lablog.py` is the
 python mirror (`probe.py`, `quantize.py`, `build_calib.py`). New scripts
 must source/import one of them — no exceptions.
 
 ## Layout
 
 ```
-models.py            family registry (dims, taps, hub ids) — single source of truth
-quant/               build_calib.py · quantize.py · probe.py · traj_probe.py
-drafter/             slice_convs.py · regen.py · regen_pool.sh (standing per-model regen) ·
-                     prep_dataset.py · extract_states.py · reshape_tokens.py · slice_rungs.py ·
-                     data_ladder.sh · sweep_epochs.sh · bootstrap_draft.py · eval_ladder.sh ·
+models.py            family registry (dims, taps, hub ids, SERVING_PARAMS) — single source of truth
+lib/                 shared run plumbing: runlib.sh (bash) + lablog.py (python)
+quants/              quant workflow: build_calib · quantize · run_quant · probe · traj_probe ·
+                     verify_quant · publish_quant · capability_battery · battery_report · cards/
+drafters/            drafter workflow: slice_convs · regen · regen_pool · prep_dataset ·
+                     extract_states · reshape_tokens · slice_rungs · data_ladder · sweep_epochs ·
+                     bootstrap_draft · eval_ladder · eval_mtp · bench_subsets · data_audit ·
                      train.md · draft_config_*.json
+finetune/            managed/external FT workflows (charter in its README; scaffold)
 data/                frozen calib/probe/ladder/conv-ids + context_pool.jsonl (pinned) +
                      regen outputs (gitignored, pinned when frozen) — the reproducible half of every number
-patches/             speculators fp8 load-cast patch
-docs/history/        verbatim research notebooks (the full v1→v5 story + postmortems)
+patches/             speculators patches (fp8 load-cast, draft-OPD)
+docs/                current-state docs: external_references · compute-platforms · data_scaling
+experiments/         closed campaigns — code + docs + records frozen together
+  quants/            calib-v2 arm (regen_calib_* · build_if3x_append · ifeval_modes ·
+                     mini_moe_smoke) + records/ (battery audits, H200 probe, bench csvs)
+  drafters/          draft-OPD + dflash2 v5 research (opd_* · split_holdout · launch/overnight
+                     drivers · campaign_check) + notebooks + records/
+scripts/             pod-side ops: pod_prep · podsh · pod_pull_pass · pod_status ·
+                     tail_run · evict_load_cache · upload_frozen_data
+hf/                  HF mirrors: quants/ (model cards) · frozen-data/ (data mirror README)
+issues/              open engineering issues
 regression.sh        100-row end-to-end pre-flight (<15 min, one GPU)
 pod.sh               push/run/pull helper for rented Blackwell pods
 RESULTS.md           every measured number, per model
 ```
+
+Untracked conventions (gitignored): `runs/` `results/` `slices/` `states/`
+`ds_*/` `draft_*/` `eval_*/` `data-raw/` `smoke/` — plus local quant
+artifacts as bare root dirs matching `*-W4A16-GPTQ*` (quants are named for
+what they are; `models.py` resolves these bare names).
+
+Historical receipts (`experiments/*/records/`, `runs/`, pod snapshots) may
+cite pre-reorg paths — `drafter/`, `quant/`, the old root `quants/` artifact
+dir. They are frozen evidence, not living docs; don't rewrite them.
 
 Provenance: extracted from the `quant-lab` branch of our llm-compressor fork
 (no library modifications — llm-compressor is consumed as a pinned dependency).

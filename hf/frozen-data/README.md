@@ -82,5 +82,5 @@ is consumed by no other process — pure held-out referee.
 These sets are *anchors, not regenerable outputs*: the repo's builders
 construct **new** sets guaranteed hash-disjoint from these (freshness by
 design) and write a `.sources.json` provenance sidecar (dataset revision +
-file SHA256) for every build. See `quant/build_calib.py` and the repo README's
+file SHA256) for every build. See `quants/build_calib.py` and the repo README's
 data section for the full reproducibility contract.

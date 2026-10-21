@@ -1,0 +1,9 @@
+{"ts": "2026-10-17T10:55:48.630Z", "type": "RUN_START", "name": "ladder-opt4b_CTRL_epoch0_end_r2", "dir": "/root/warp-3090-quant-lab/runs/ladder-opt4b_CTRL_epoch0_end_r2.20261017T105548Z.59896"}
+{"ts": "2026-10-17T10:55:48.668Z", "type": "PREFLIGHT_OK", "files": "3"}
+{"ts": "2026-10-17T10:55:48.731Z", "type": "FILES_STAGED", "eval_dir": "/root/warp-3090-quant-lab/eval_opt4b_CTRL_epoch0_end_r2"}
+{"ts": "2026-10-17T10:55:48.849Z", "type": "SERVER_LAUNCH", "pid": "59915", "log": "/root/warp-3090-quant-lab/vllm_eval_opt4b_CTRL_epoch0_end_r2.log"}
+{"ts": "2026-10-17T10:59:55.326Z", "type": "SERVER_HEALTHY", "elapsed": "247s", "port": "8151"}
+{"ts": "2026-10-17T10:59:55.383Z", "type": "PROMPTS_START", "n": "20 temp=0.7"}
+{"ts": "2026-10-17T11:00:20.334Z", "type": "PROMPTS_DONE"}
+{"ts": "2026-10-17T11:00:47.530Z", "type": "SERVER_STOPPED", "pid": "59915", "signal": "TERM"}
+{"ts": "2026-10-17T11:00:47.593Z", "type": "RUN_DONE", "status": "ok", "tau": "opt4b_CTRL_epoch0_end_r2 1.231 accepted=935"}
